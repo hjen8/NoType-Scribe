@@ -647,7 +647,7 @@ class UIManager:
         self.help_win.configure(bg=self.BG_DARK)
         self.help_win.attributes("-topmost", True)
 
-        w, h = 580, 520
+        w, h = 650, 580
         sw = self.help_win.winfo_screenwidth()
         sh = self.help_win.winfo_screenheight()
         self.help_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
@@ -664,14 +664,14 @@ class UIManager:
             font=("Microsoft JhengHei", 9), fg="#bdc3c7", bg="#1a252f"
         ).pack(pady=(2, 0))
 
-        content_box = tk.Frame(self.help_win, bg=self.BG_DARK, padx=20, pady=12)
+        content_box = tk.Frame(self.help_win, bg=self.BG_DARK, padx=20, pady=10)
         content_box.pack(fill="both", expand=True)
 
         def add_card(title, text, title_fg="#2ecc71"):
-            card = tk.Frame(content_box, bg=self.BG_CARD, padx=12, pady=8, bd=1, relief="solid")
+            card = tk.Frame(content_box, bg=self.BG_CARD, padx=14, pady=8, bd=1, relief="solid")
             card.pack(fill="x", pady=5)
             tk.Label(card, text=title, font=("Microsoft JhengHei", 10, "bold"), fg=title_fg, bg=self.BG_CARD).pack(anchor="w")
-            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.BG_CARD, justify="left").pack(anchor="w", pady=(3, 0))
+            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.BG_CARD, justify="left", wraplength=590).pack(anchor="w", pady=(3, 0))
 
         add_card(
             "🎙️ 鍵盤右手邊 Alt 鍵 —— 語音輸入 (二合一智慧雙模態)",
@@ -681,12 +681,15 @@ class UIManager:
         )
         add_card(
             "🔄 F8 鍵 —— 桌面全域反白選取重新修飾",
-            "在任何編輯器、瀏覽器或記事本中反白文字，按 F8，AI 自動潤飾語句並原地替換覆蓋。",
+            "• 在任何編輯器、瀏覽器或記事本中反白選取文字。\n"
+            "• 按下 F8，AI 會自動重新潤飾語句並原地替換覆蓋。",
             "#9b59b6"
         )
         add_card(
             "✏️ Shift + F8 鍵 —— 極速糾錯教學與詞彙學習",
-            "反白錯字後按 Shift+F8 彈出糾錯浮窗。支援「僅本次替換」與「永久學習並替換」（自動沉澱至專屬字典，日後自動校正）。",
+            "• 反白錯字後按 Shift+F8 彈出糾錯浮窗，支援雙模式：\n"
+            "  - 僅本次替換：單純替換當前選取文字，不存入字典\n"
+            "  - 永久學習並替換：替換文字並同步寫入專屬字典，日後自動校正",
             "#2ecc71"
         )
         add_card(
