@@ -101,7 +101,7 @@ class UIManager:
             return
             
         self.settings_win = tk.Toplevel(self.root)
-        self.settings_win.title("NoType 智慧核心與金鑰設定")
+        self.settings_win.title("NoType API 設定 (API Keys)")
         self.settings_win.attributes("-topmost", True)
         
         w, h = 480, 270

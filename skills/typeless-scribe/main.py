@@ -48,6 +48,35 @@ def on_open_dictionary_notepad(icon, item):
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
     subprocess.Popen(['notepad.exe', dict_path])
 
+def on_restart(icon, item):
+    global _mutex
+    import subprocess
+    import time
+    
+    bat_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'start_admin.bat'))
+    if not os.path.exists(bat_path):
+        bat_path = r"E:\AI_Work\NoType\start_admin.bat"
+        
+    try:
+        if _mutex:
+            kernel32.CloseHandle(_mutex)
+            _mutex = None
+    except Exception:
+        pass
+        
+    try:
+        icon.stop()
+    except Exception:
+        pass
+        
+    try:
+        os.startfile(bat_path)
+    except Exception:
+        subprocess.Popen(['cmd.exe', '/c', bat_path], shell=True)
+        
+    time.sleep(0.1)
+    os._exit(0)
+
 def on_quit(icon, item):
     icon.stop()
     ui.msg_queue.put('quit')
@@ -65,8 +94,9 @@ def run_tray():
                 pystray.MenuItem('📤 匯出字典 (Export)...', on_export_dictionary),
                 pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
             )),
-            pystray.MenuItem('設定 (Settings)', on_open_settings),
-            pystray.MenuItem('離開 (Quit)', on_quit)
+            pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
+            pystray.MenuItem('離開 (Quit)', on_quit),
+            pystray.MenuItem('🔄 重新啟動 (Restart)', on_restart)
         )
     )
     icon.run()
@@ -84,7 +114,7 @@ def main():
     print("=" * 50)
     
     if not get_api_key():
-        print("⚠️ 尚未設定 API Key！請在螢幕右下角系統匣找到藍色圓形圖示，按右鍵選擇「設定」來輸入。")
+        print("⚠️ 尚未設定 API Key！請在螢幕右下角系統匣找到藍色圓形圖示，按右鍵選擇「API 設定」來輸入。")
     else:
         print("✅ API Key 已從設定檔自動載入，系統準備就緒！")
 
