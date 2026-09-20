@@ -34,6 +34,9 @@ def on_open_history(icon, item):
 def on_open_settings(icon, item):
     ui.msg_queue.put('open_settings')
 
+def on_open_help(icon, item):
+    ui.msg_queue.put('open_help')
+
 def on_open_dictionary(icon, item):
     ui.msg_queue.put('open_dictionary')
 
@@ -95,6 +98,7 @@ def run_tray():
                 pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
             )),
             pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
+            pystray.MenuItem('📖 操作說明與快捷鍵 (README)', on_open_help),
             pystray.MenuItem('離開 (Quit)', on_quit),
             pystray.MenuItem('🔄 重新啟動 (Restart)', on_restart)
         )

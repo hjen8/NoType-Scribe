@@ -96,6 +96,15 @@ class KeyboardManager:
             
         pyperclip.copy("")
         time.sleep(0.05)
+        
+        # 強制釋放可能被使用者手動按住的修飾鍵（特別是 Shift 鍵！否則在 Antigravity/Chrome/VSCode 中會觸發 Ctrl+Shift+C 開發者工具而非複製文字）
+        for k in ['shift', 'shiftleft', 'shiftright', 'alt', 'altleft', 'altright']:
+            try:
+                pyautogui.keyUp(k)
+            except Exception:
+                pass
+                
+        time.sleep(0.05)
         pyautogui.hotkey('ctrl', 'c')
         time.sleep(0.15)
         
@@ -104,6 +113,16 @@ class KeyboardManager:
             selected = pyperclip.paste()
         except Exception:
             pass
+            
+        # 若第一次未取到（可能特定應用程式稍微卡頓），重試一次
+        if not selected or not selected.strip():
+            time.sleep(0.05)
+            pyautogui.hotkey('ctrl', 'c')
+            time.sleep(0.12)
+            try:
+                selected = pyperclip.paste()
+            except Exception:
+                pass
             
         if not selected or not selected.strip():
             try:

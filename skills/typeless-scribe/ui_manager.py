@@ -14,6 +14,7 @@ class UIManager:
         self.settings_win = None
         self.history_win = None
         self.dictionary_win = None
+        self.help_win = None
         self.toast_wins = []
 
     def show_toast(self, text, bg="#c0392b", duration=3500):
@@ -633,6 +634,92 @@ class UIManager:
         ).pack(side="left", padx=6)
 
     # =====================================================
+    #  操作說明與快捷鍵指南 (Help / README)
+    # =====================================================
+    def open_help(self):
+        if self.help_win and self.help_win.winfo_exists():
+            self.help_win.lift()
+            self.help_win.focus_force()
+            return
+
+        self.help_win = tk.Toplevel(self.root)
+        self.help_win.title("NoType 快捷鍵與操作指南")
+        self.help_win.configure(bg=self.BG_DARK)
+        self.help_win.attributes("-topmost", True)
+
+        w, h = 580, 520
+        sw = self.help_win.winfo_screenwidth()
+        sh = self.help_win.winfo_screenheight()
+        self.help_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        self.help_win.resizable(False, False)
+
+        header_frame = tk.Frame(self.help_win, bg="#1a252f", pady=12)
+        header_frame.pack(fill="x")
+        tk.Label(
+            header_frame, text="📖 NoType 核心快捷鍵與操作指南", 
+            font=("Microsoft JhengHei", 13, "bold"), fg="#3498db", bg="#1a252f"
+        ).pack()
+        tk.Label(
+            header_frame, text="專為極速輸入、桌面反白修飾與自適應學習打造", 
+            font=("Microsoft JhengHei", 9), fg="#bdc3c7", bg="#1a252f"
+        ).pack(pady=(2, 0))
+
+        content_box = tk.Frame(self.help_win, bg=self.BG_DARK, padx=20, pady=12)
+        content_box.pack(fill="both", expand=True)
+
+        def add_card(title, text, title_fg="#2ecc71"):
+            card = tk.Frame(content_box, bg=self.CARD_BG, padx=12, pady=8, bd=1, relief="solid")
+            card.pack(fill="x", pady=5)
+            tk.Label(card, text=title, font=("Microsoft JhengHei", 10, "bold"), fg=title_fg, bg=self.CARD_BG).pack(anchor="w")
+            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.CARD_BG, justify="left").pack(anchor="w", pady=(3, 0))
+
+        add_card(
+            "🎙️ 鍵盤右手邊 Alt 鍵 —— 語音輸入 (二合一智慧雙模態)",
+            "• 單擊切換 (Toggle)：按一下開始錄音，講完再按一下停止並自動貼上純文字。\n"
+            "• 長按放開 (Hold-to-Talk)：大拇指按住說話，鬆開即停止並自動貼上純文字。",
+            "#3498db"
+        )
+        add_card(
+            "🔄 F8 鍵 —— 桌面全域反白選取重新修飾",
+            "在任何編輯器、瀏覽器或記事本中反白文字，按 F8，AI 自動潤飾語句並原地替換覆蓋。",
+            "#9b59b6"
+        )
+        add_card(
+            "✏️ Shift + F8 鍵 —— 極速糾錯教學與詞彙學習",
+            "反白錯字後按 Shift+F8 彈出糾錯浮窗。支援「僅本次替換」與「永久學習並替換」（自動沉澱至專屬字典，日後自動校正）。",
+            "#2ecc71"
+        )
+        add_card(
+            "⚙️ 螢幕右下角系統匣選單 (藍色圖示按右鍵)",
+            "• 歷史紀錄 (重播音檔 / 重新辨識)   • 專屬字典管理 (支援匯入/匯出)\n"
+            "• API 設定 (Groq / Gemini)        • 🔄 重新啟動 (一鍵重拉服務)",
+            "#f39c12"
+        )
+
+        btn_bar = tk.Frame(self.help_win, bg=self.BG_DARK, pady=10)
+        btn_bar.pack(fill="x")
+
+        def open_readme_file():
+            import subprocess
+            readme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'README.md')
+            if not os.path.exists(readme_path):
+                readme_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'README.md'))
+            subprocess.Popen(['notepad.exe', readme_path])
+
+        tk.Button(
+            btn_bar, text="📝 以記事本開啟完整 README.md", command=open_readme_file,
+            font=("Microsoft JhengHei", 9, "bold"), bg="#34495e", fg="white", bd=0, padx=12, pady=5
+        ).pack(side="left", padx=20)
+
+        tk.Button(
+            btn_bar, text=" 確定關閉 (Esc) ", command=self.help_win.destroy,
+            font=("Microsoft JhengHei", 9, "bold"), bg="#2980b9", fg="white", bd=0, padx=15, pady=5
+        ).pack(side="right", padx=20)
+
+        self.help_win.bind("<Escape>", lambda e: self.help_win.destroy())
+        self.help_win.bind("<Return>", lambda e: self.help_win.destroy())
+
+    # =====================================================
     #  專屬字典管理面板 (Dictionary Manager & Import/Export)
     # =====================================================
     def open_dictionary(self):
@@ -938,6 +1025,8 @@ class UIManager:
                     self.hide_floating()
                 elif item == 'open_settings':
                     self.open_settings()
+                elif item == 'open_help':
+                    self.open_help()
                 elif item == 'open_history':
                     self.open_history()
                 elif item == 'open_dictionary':

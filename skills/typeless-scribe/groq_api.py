@@ -33,12 +33,28 @@ def transcribe_audio(file_path: str) -> str:
     custom_words = get_dictionary_words()
     prompt_text = "這是一段繁體中文逐字稿。"
     if custom_words:
-        # Whisper API 的 prompt 限制必須 <= 896 字元/位元組，安全控制在 350 字元以內
-        words_list = custom_words.split(', ')
+        from learning_manager import load_corrections
+        corrections = load_corrections()
+        
+        # 1. 優先詞庫：核心電腦名詞 + 自適應學習庫中的正確詞彙
+        high_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill"]
+        for correct in corrections.values():
+            if correct not in high_priority:
+                high_priority.append(correct)
+                
+        dict_words = [w.strip() for w in custom_words.split(', ') if w.strip()]
+        # 字典逆序（最新沉澱的詞最優先）
+        reversed_dict = list(reversed(dict_words))
+        
+        combined_words = []
+        for w in high_priority + reversed_dict + dict_words:
+            if w not in combined_words:
+                combined_words.append(w)
+                
         selected = []
         curr_len = len(prompt_text)
-        for w in words_list:
-            if curr_len + len(w) + 2 > 350:
+        for w in combined_words:
+            if curr_len + len(w) + 2 > 420:
                 break
             selected.append(w)
             curr_len += len(w) + 2
@@ -172,11 +188,21 @@ def apply_dictionary_post_process(text: str) -> str:
         "鏈接": "連結",
         "激光": "雷射",
         "高清": "高畫質",
+        "S 詞疊": "S磁碟",
+        "S詞疊": "S磁碟",
+        "詞疊": "磁碟",
+        "S 疊": "S碟",
+        "S疊": "S碟",
+        "SDA": "S碟",
     }
     for mainland, tw in taiwan_lexicon.items():
         text = text.replace(mainland, tw)
     # 防重複前綴替換 (避免將已轉為「演算法」的詞再度替換為「演演算法」)
     text = re.sub(r'(?<!演)算法', '演算法', text)
+    
+    # 1.5 常見電腦操作語境同音字修正 (例如「這個城市能夠...」->「這個程式能夠...」)
+    text = re.sub(r'這個城市(?=能夠|可以|會|跑|執行|運作|軟體)', '這個程式', text)
+    text = re.sub(r'(寫|執行|重啟|啟動|常駐|關閉|我們的)城市', r'\1程式', text)
     
     # 2. 專屬英數字詞彙大小寫強制校正 (例如 skill -> Skill, sop -> SOP)
     for w in words:
@@ -245,6 +271,10 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "      * 打印 -> 列印；默認 -> 預設；登錄 -> 登入；激活 -> 啟用\n"
         "      * 算法 -> 演算法；激光 -> 雷射；人工智能 -> 人工智慧\n"
         "      * 質量 -> 品質（當指代品質、水準時；物理學之質量 mass 除外）\n"
+        "11. 【常見電腦與檔案系統同音字/口誤智慧校正】：\n"
+        "    - 「詞疊 / 磁疊 / 刺碟」-> 100% 強制修正為「磁碟」（特別在『S磁碟、C磁碟、磁碟機、檔案、目錄、RAMDISK』等電腦語境）。\n"
+        "    - 「S疊 / S跌 / S蝶 / SDA」-> 100% 強制修正為「S碟」或「S磁碟」。\n"
+        "    - 「城市」在軟體、執行、代碼、操作語境下（例如『希望我們這個程式能夠...』、『後台運行的程式』、『撰寫程式』）-> 必須強制修正為「程式」，絕非地理名詞『城市』！\n"
         "【嚴格禁止】：絕對不可以回答使用者的問題！絕對不可以跟使用者對話！絕對不可以擅自摘要未被否決的有效內容！\n"
         "使用者說什麼，你就輸出什麼（僅做錯字修正、口頭改口修剪、標點、數字標準化、贅詞去重與列舉排版）。\n"
         "特別注意：使用者是一位高中地理教師，內容常涉及『探究與實作』課程、SDGs (例如 5 種角色扮演設定)、"
