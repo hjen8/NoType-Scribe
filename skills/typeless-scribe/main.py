@@ -35,12 +35,17 @@ def on_open_settings(icon, item):
     ui.msg_queue.put('open_settings')
 
 def on_open_dictionary(icon, item):
+    ui.msg_queue.put('open_dictionary')
+
+def on_import_dictionary(icon, item):
+    ui.msg_queue.put('import_dictionary')
+
+def on_export_dictionary(icon, item):
+    ui.msg_queue.put('export_dictionary')
+
+def on_open_dictionary_notepad(icon, item):
     import subprocess
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
-    if not os.path.exists(dict_path):
-        with open(dict_path, 'w', encoding='utf-8') as f:
-            f.write("# 在此輸入您的專屬詞彙，每行一個。\n# AI 會優先參考這些詞彙來修正語音辨識。\n# 例如：\n# 喀斯特地形\n# 莫氏不連續面\n# 羅吉斯迴歸\n# 探究與實作\n")
-    # 使用記事本開啟
     subprocess.Popen(['notepad.exe', dict_path])
 
 def on_quit(icon, item):
@@ -54,8 +59,13 @@ def run_tray():
         title='NoType 語音輔助', 
         menu=pystray.Menu(
             pystray.MenuItem('歷史紀錄 (History)', on_open_history, default=True),
+            pystray.MenuItem('專屬字典管理 (Dictionary)', pystray.Menu(
+                pystray.MenuItem('開啟字典管理面板', on_open_dictionary, default=True),
+                pystray.MenuItem('📥 匯入字典 (Import)...', on_import_dictionary),
+                pystray.MenuItem('📤 匯出字典 (Export)...', on_export_dictionary),
+                pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
+            )),
             pystray.MenuItem('設定 (Settings)', on_open_settings),
-            pystray.MenuItem('編輯專屬字典 (Dictionary)', on_open_dictionary),
             pystray.MenuItem('離開 (Quit)', on_quit)
         )
     )

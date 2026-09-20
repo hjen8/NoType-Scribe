@@ -13,6 +13,7 @@ class UIManager:
         self.floating_win = None
         self.settings_win = None
         self.history_win = None
+        self.dictionary_win = None
         self.toast_wins = []
 
     def show_toast(self, text, bg="#c0392b", duration=3500):
@@ -631,6 +632,296 @@ class UIManager:
             bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
         ).pack(side="left", padx=6)
 
+    # =====================================================
+    #  專屬字典管理面板 (Dictionary Manager & Import/Export)
+    # =====================================================
+    def open_dictionary(self):
+        import dictionary_manager
+        
+        if self.dictionary_win and self.dictionary_win.winfo_exists():
+            self.dictionary_win.lift()
+            self.dictionary_win.focus_force()
+            self._refresh_dictionary_list()
+            return
+            
+        self.dictionary_win = tk.Toplevel(self.root)
+        self.dictionary_win.title("NoType 專屬字典管理 (Dictionary Manager)")
+        self.dictionary_win.configure(bg=self.BG_DARK)
+        self.dictionary_win.attributes("-topmost", True)
+        
+        w, h = 540, 620
+        sw = self.dictionary_win.winfo_screenwidth()
+        sh = self.dictionary_win.winfo_screenheight()
+        self.dictionary_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        self.dictionary_win.minsize(460, 480)
+        
+        def on_close():
+            if self.dictionary_win:
+                self.dictionary_win.destroy()
+                self.dictionary_win = None
+        self.dictionary_win.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # --- Top Header ---
+        header = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=12)
+        header.pack(fill="x")
+        
+        title_lbl = tk.Label(
+            header, text="📚 專屬自訂字典管理", 
+            font=("Microsoft JhengHei", 14, "bold"), 
+            fg=self.FG_TEXT, bg=self.BG_DARK
+        )
+        title_lbl.pack(anchor="w")
+        
+        self._dict_count_lbl = tk.Label(
+            header, text="載入中...",
+            font=("Microsoft JhengHei", 9),
+            fg=self.FG_DIM, bg=self.BG_DARK
+        )
+        self._dict_count_lbl.pack(anchor="w", pady=(2, 0))
+        
+        # --- Search Bar ---
+        search_box = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=4)
+        search_box.pack(fill="x")
+        
+        tk.Label(
+            search_box, text="🔍", font=("Microsoft JhengHei", 10),
+            fg=self.FG_DIM, bg=self.BG_DARK
+        ).pack(side="left")
+        
+        self._dict_search_var = tk.StringVar()
+        search_entry = tk.Entry(
+            search_box, textvariable=self._dict_search_var,
+            font=("Microsoft JhengHei", 10),
+            bg=self.BG_CARD, fg=self.FG_TEXT, insertbackground="white", bd=1
+        )
+        search_entry.pack(side="left", fill="x", expand=True, padx=6)
+        
+        # --- Listbox Frame ---
+        list_frame = tk.Frame(self.dictionary_win, bg=self.BG_CARD, padx=2, pady=2)
+        list_frame.pack(fill="both", expand=True, padx=16, pady=6)
+        
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        self._dict_listbox = tk.Listbox(
+            list_frame,
+            font=("Microsoft JhengHei", 10),
+            bg=self.BG_CARD, fg=self.FG_TEXT,
+            selectbackground="#2980b9", selectforeground="white",
+            exportselection=False,
+            activestyle="none", bd=0, highlightthickness=0,
+            yscrollcommand=scrollbar.set
+        )
+        self._dict_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self._dict_listbox.yview)
+        
+        # --- Quick Add / Delete Single Word Frame ---
+        add_box = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=6)
+        add_box.pack(fill="x")
+        
+        self._dict_add_var = tk.StringVar()
+        add_entry = tk.Entry(
+            add_box, textvariable=self._dict_add_var,
+            font=("Microsoft JhengHei", 10),
+            bg=self.BG_CARD, fg=self.FG_TEXT, insertbackground="white", bd=1
+        )
+        add_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        
+        def do_add_word(event=None):
+            val = self._dict_add_var.get().strip()
+            if val:
+                if dictionary_manager.add_word(val):
+                    self.toast(f"✅ 已新增詞彙「{val}」！", is_error=False, duration=2000)
+                    self._dict_add_var.set("")
+                    self._refresh_dictionary_list()
+                else:
+                    self.toast(f"⚠️ 詞彙「{val}」已存在或無效", is_error=True, duration=2500)
+                    
+        add_entry.bind("<Return>", do_add_word)
+        
+        tk.Button(
+            add_box, text=" ➕ 新增詞彙 ", command=do_add_word,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=8, pady=3
+        ).pack(side="left")
+        
+        def do_delete_word():
+            sel = self._dict_listbox.curselection()
+            if not sel:
+                self.toast("⚠️ 請先在清單中點選要刪除的詞彙", is_error=True, duration=2500)
+                return
+            word = self._dict_listbox.get(sel[0])
+            if dictionary_manager.delete_word(word):
+                self.toast(f"🗑️ 已刪除詞彙「{word}」", is_error=False, duration=2000)
+                self._refresh_dictionary_list()
+                
+        tk.Button(
+            add_box, text=" 🗑️ 刪除選取 ", command=do_delete_word,
+            font=("Microsoft JhengHei", 9),
+            bg="#c0392b", fg="white", bd=0, padx=8, pady=3
+        ).pack(side="left", padx=(6, 0))
+        
+        # --- Bottom Toolbar: Import / Export / Notepad ---
+        toolbar = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=10)
+        toolbar.pack(fill="x")
+        
+        # 1. 匯入字典按鈕
+        tk.Button(
+            toolbar, text=" 📥 匯入字典 (Import)... ", command=self._prompt_import_dictionary,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=10, pady=5
+        ).pack(side="left", padx=(0, 6))
+        
+        # 2. 匯出字典按鈕
+        tk.Button(
+            toolbar, text=" 📤 匯出字典 (Export)... ", command=self._prompt_export_dictionary,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#8e44ad", fg="white", bd=0, padx=10, pady=5
+        ).pack(side="left", padx=6)
+        
+        # 3. 記事本開啟
+        def open_notepad():
+            import subprocess
+            subprocess.Popen(['notepad.exe', dictionary_manager.get_dictionary_path()])
+            
+        tk.Button(
+            toolbar, text=" 📝 記事本開啟 ", command=open_notepad,
+            font=("Microsoft JhengHei", 9),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=5
+        ).pack(side="right")
+        
+        # 綁定即時搜尋過濾
+        self._dict_search_var.trace_add("write", lambda *args: self._filter_dictionary_list())
+        self._refresh_dictionary_list()
+
+    def _refresh_dictionary_list(self):
+        import dictionary_manager
+        if not hasattr(self, '_dict_listbox') or not self._dict_listbox:
+            return
+        self._all_dict_words = dictionary_manager.load_words()
+        if hasattr(self, '_dict_count_lbl') and self._dict_count_lbl:
+            self._dict_count_lbl.config(text=f"目前收錄 {len(self._all_dict_words)} 筆專用詞彙（AI 優先參考修正）")
+        self._filter_dictionary_list()
+
+    def _filter_dictionary_list(self):
+        if not hasattr(self, '_dict_listbox') or not self._dict_listbox:
+            return
+        query = self._dict_search_var.get().strip().lower() if hasattr(self, '_dict_search_var') else ""
+        self._dict_listbox.delete(0, tk.END)
+        all_words = getattr(self, '_all_dict_words', [])
+        for w in all_words:
+            if not query or query in w.lower():
+                self._dict_listbox.insert(tk.END, w)
+
+    def _prompt_import_dictionary(self):
+        from tkinter import filedialog
+        parent_win = self.dictionary_win if (self.dictionary_win and self.dictionary_win.winfo_exists()) else self.root
+        
+        filepath = filedialog.askopenfilename(
+            parent=parent_win,
+            title="選擇要匯入的專屬字典檔案",
+            filetypes=[("文字檔案 (*.txt)", "*.txt"), ("所有檔案 (*.*)", "*.*")]
+        )
+        if not filepath:
+            return
+            
+        self._show_import_mode_dialog(filepath)
+
+    def _show_import_mode_dialog(self, filepath):
+        import dictionary_manager
+        parent_win = self.dictionary_win if (self.dictionary_win and self.dictionary_win.winfo_exists()) else self.root
+        
+        dialog = tk.Toplevel(parent_win)
+        dialog.title("選擇字典匯入方式")
+        dialog.configure(bg=self.BG_DARK)
+        dialog.attributes("-topmost", True)
+        dialog.transient(parent_win)
+        dialog.grab_set()
+        
+        w, h = 440, 220
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        dialog.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        
+        fname = os.path.basename(filepath)
+        tk.Label(
+            dialog, text=f"📥 準備匯入檔案：{fname}",
+            font=("Microsoft JhengHei", 11, "bold"),
+            fg=self.FG_TEXT, bg=self.BG_DARK
+        ).pack(pady=(16, 6))
+        
+        tk.Label(
+            dialog, 
+            text="請選擇匯入模式：\n• 合併增補：保留既有詞彙，只追加新詞並自動去重複 (推薦)\n• 完全覆蓋：以匯入檔完全取代目前字典 (無法復原)",
+            font=("Microsoft JhengHei", 9), justify="left",
+            fg=self.FG_DIM, bg=self.BG_DARK
+        ).pack(pady=4, padx=20)
+        
+        btn_box = tk.Frame(dialog, bg=self.BG_DARK)
+        btn_box.pack(pady=14)
+        
+        def do_merge():
+            dialog.destroy()
+            try:
+                added, total = dictionary_manager.import_dictionary(filepath, mode="merge")
+                self.toast(f"✅ 字典合併完成！新增 {added} 筆新詞 (目前共 {total} 筆)", is_error=False, duration=3500)
+                if hasattr(self, '_refresh_dictionary_list'):
+                    self._refresh_dictionary_list()
+            except Exception as e:
+                self.toast(f"⚠️ 匯入失敗: {e}", is_error=True, duration=4000)
+                
+        def do_overwrite():
+            dialog.destroy()
+            try:
+                count, total = dictionary_manager.import_dictionary(filepath, mode="overwrite")
+                self.toast(f"🔄 字典已完全覆蓋！共匯入 {total} 筆詞彙", is_error=False, duration=3500)
+                if hasattr(self, '_refresh_dictionary_list'):
+                    self._refresh_dictionary_list()
+            except Exception as e:
+                self.toast(f"⚠️ 覆蓋失敗: {e}", is_error=True, duration=4000)
+                
+        tk.Button(
+            btn_box, text=" ➕ 合併增補 (推薦) ", command=do_merge,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=10, pady=5
+        ).pack(side="left", padx=6)
+        
+        tk.Button(
+            btn_box, text=" ⚠️ 完全覆蓋 ", command=do_overwrite,
+            font=("Microsoft JhengHei", 9),
+            bg="#e67e22", fg="white", bd=0, padx=10, pady=5
+        ).pack(side="left", padx=6)
+        
+        tk.Button(
+            btn_box, text=" 取消 ", command=dialog.destroy,
+            font=("Microsoft JhengHei", 9),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=5
+        ).pack(side="left", padx=6)
+
+    def _prompt_export_dictionary(self):
+        import dictionary_manager
+        from tkinter import filedialog
+        from datetime import datetime
+        parent_win = self.dictionary_win if (self.dictionary_win and self.dictionary_win.winfo_exists()) else self.root
+        
+        default_name = f"NoType_Dictionary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        filepath = filedialog.asksaveasfilename(
+            parent=parent_win,
+            title="選擇匯出儲存位置",
+            initialfile=default_name,
+            defaultextension=".txt",
+            filetypes=[("文字檔案 (*.txt)", "*.txt"), ("所有檔案 (*.*)", "*.*")]
+        )
+        if not filepath:
+            return
+            
+        try:
+            count = dictionary_manager.export_dictionary(filepath)
+            fname = os.path.basename(filepath)
+            self.toast(f"✅ 專屬字典已成功匯出至：{fname} (共 {count} 筆詞彙)", is_error=False, duration=3500)
+        except Exception as e:
+            self.toast(f"⚠️ 匯出失敗: {e}", is_error=True, duration=4000)
+
     def process_queue(self):
         try:
             while True:
@@ -647,6 +938,14 @@ class UIManager:
                     self.hide_floating()
                 elif item == 'open_settings':
                     self.open_settings()
+                elif item == 'open_history':
+                    self.open_history()
+                elif item == 'open_dictionary':
+                    self.open_dictionary()
+                elif item == 'import_dictionary':
+                    self._prompt_import_dictionary()
+                elif item == 'export_dictionary':
+                    self._prompt_export_dictionary()
                 elif item == 'open_history':
                     self.open_history()
                 elif item == 'refresh_history':
