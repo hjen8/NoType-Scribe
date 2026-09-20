@@ -6,10 +6,10 @@ import ctypes
 # 0. Windows 單實例互斥鎖防護 (防止重複啟動導致 F9 鍵盤鉤子重複監聽、文字重複貼上兩次)
 kernel32 = ctypes.windll.kernel32
 _mutex = kernel32.CreateMutexW(None, False, "Local\\NoType_Typeless_Scribe_SingleInstance_Mutex")
-if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+if kernel32.GetLastError() in (183, 5):  # ERROR_ALREADY_EXISTS or ERROR_ACCESS_DENIED
     if _mutex:
         kernel32.CloseHandle(_mutex)
-    sys.exit(0)
+    os._exit(0)
 
 # 將所有的輸出導向至 run_log.txt，方便我們在背景模式 (pythonw) 時除錯
 log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_log.txt')
