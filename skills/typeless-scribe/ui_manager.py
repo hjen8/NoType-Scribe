@@ -668,10 +668,10 @@ class UIManager:
         content_box.pack(fill="both", expand=True)
 
         def add_card(title, text, title_fg="#2ecc71"):
-            card = tk.Frame(content_box, bg=self.CARD_BG, padx=12, pady=8, bd=1, relief="solid")
+            card = tk.Frame(content_box, bg=self.BG_CARD, padx=12, pady=8, bd=1, relief="solid")
             card.pack(fill="x", pady=5)
-            tk.Label(card, text=title, font=("Microsoft JhengHei", 10, "bold"), fg=title_fg, bg=self.CARD_BG).pack(anchor="w")
-            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.CARD_BG, justify="left").pack(anchor="w", pady=(3, 0))
+            tk.Label(card, text=title, font=("Microsoft JhengHei", 10, "bold"), fg=title_fg, bg=self.BG_CARD).pack(anchor="w")
+            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.BG_CARD, justify="left").pack(anchor="w", pady=(3, 0))
 
         add_card(
             "🎙️ 鍵盤右手邊 Alt 鍵 —— 語音輸入 (二合一智慧雙模態)",
