@@ -25,8 +25,8 @@ def _is_right_alt(key):
         return True
     return False
 
-def _is_f8(key):
-    return key == keyboard.Key.f8
+def _is_f9(key):
+    return key == keyboard.Key.f9
 
 def _is_shift(key):
     return key in {keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r}
@@ -37,7 +37,7 @@ class KeyboardManager:
         self.is_recording = False
         self.alt_r_pressed = False
         self.alt_r_down_time = 0.0
-        self.f8_pressed = False
+        self.f9_pressed = False
         self.shift_pressed = False
         self.listener = None
         self.target_hwnd = None
@@ -204,10 +204,10 @@ class KeyboardManager:
             self._force_focus_and_paste(target_hwnd, refined, selected_text, old_clip)
             ui.toast("✅ 選取文字已重新修飾替換！", is_error=False, duration=2000)
         except Exception as e:
-            print(f"[F8 Error] {e}")
+            print(f"[F9 Error] {e}")
             ui.toast(f"⚠️ 修飾失敗: {e}", is_error=True, duration=3000)
 
-    def process_f8(self):
+    def process_f9(self):
         import ctypes
         target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         selected_text, old_clip = self._get_selected_text()
@@ -216,7 +216,7 @@ class KeyboardManager:
             return
 
         if self.shift_pressed:
-            # Shift + F8: 極速教學與自適應學習浮窗
+            # Shift + F9: 極速教學與自適應學習浮窗
             def on_saved(correct_word):
                 def paste_worker():
                     self._force_focus_and_paste(target_hwnd, correct_word, selected_text, old_clip)
@@ -224,7 +224,7 @@ class KeyboardManager:
                         
             ui.msg_queue.put(('open_quick_learn', selected_text, on_saved))
         else:
-            # 純 F8: 選取文字重新修飾
+            # 純 F9: 選取文字重新修飾
             threading.Thread(
                 target=self._rephrase_selection_thread,
                 args=(selected_text, old_clip, target_hwnd),
@@ -365,10 +365,10 @@ class KeyboardManager:
             if _is_shift(key):
                 self.shift_pressed = True
 
-            if _is_f8(key):
-                if not self.f8_pressed:
-                    self.f8_pressed = True
-                    self.process_f8()
+            if _is_f9(key):
+                if not self.f9_pressed:
+                    self.f9_pressed = True
+                    self.process_f9()
 
             elif _is_right_alt(key):
                 if not self.alt_r_pressed:
@@ -386,8 +386,8 @@ class KeyboardManager:
         try:
             if _is_shift(key):
                 self.shift_pressed = False
-            if _is_f8(key):
-                self.f8_pressed = False
+            if _is_f9(key):
+                self.f9_pressed = False
             if _is_right_alt(key):
                 down_time = getattr(self, 'alt_r_down_time', 0.0)
                 self.alt_r_pressed = False
@@ -408,5 +408,5 @@ class KeyboardManager:
         self.listener.start()
         print("[Keyboard] Hotkey listener started:")
         print("  <右側 Alt>   : 語音輸入 (支援單擊切換 / 長按放開雙模態)")
-        print("  <F8>         : 選取文字重新修飾")
-        print("  <Shift + F8> : 選取文字極速糾錯教學")
+        print("  <F9>         : 選取文字重新修飾")
+        print("  <Shift + F9> : 選取文字極速糾錯教學")
