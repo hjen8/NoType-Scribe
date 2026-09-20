@@ -3,7 +3,7 @@ import threading
 import os
 import ctypes
 
-# 0. Windows 單實例互斥鎖防護 (防止重複啟動導致 F9 鍵盤鉤子重複監聽、文字重複貼上兩次)
+# 0. Windows 單實例互斥鎖防護 (防止重複啟動導致鍵盤鉤子重複監聽、文字重複貼上兩次)
 kernel32 = ctypes.windll.kernel32
 _mutex = kernel32.CreateMutexW(None, False, "Local\\NoType_Typeless_Scribe_SingleInstance_Mutex")
 if kernel32.GetLastError() in (183, 5):  # ERROR_ALREADY_EXISTS or ERROR_ACCESS_DENIED
@@ -112,9 +112,14 @@ def main():
     print(" 🚀 NoType 語音輔助常駐程式已啟動")
     print("=" * 50)
     print("操作方式：")
-    print("  【錄音熱鍵：鍵盤右手邊 Alt 鍵】")
+    print("  【錄音主熱鍵：鍵盤右手邊 Alt 鍵】(底層物理阻截防選單奪焦)")
     print("    1. 單擊切換 (Toggle)      : 按一下開始錄音，按第二下停止並貼上")
     print("    2. 長按說話 (Hold-to-Talk): 按住右 Alt 說話，放開即停止並貼上")
+    print("  【錄音備用熱鍵：F9 鍵】")
+    print("    1. 單擊切換 (Toggle)      : 按一下開始錄音，再按一下停止並貼上")
+    print("  【反白修飾與糾錯熱鍵】")
+    print("    1. F8 鍵                   : 桌面全域反白選取文字重新修飾")
+    print("    2. Shift + F8 鍵           : 桌面全域極速糾錯教學與詞彙學習")
     print("=" * 50)
     
     if not get_api_key():
