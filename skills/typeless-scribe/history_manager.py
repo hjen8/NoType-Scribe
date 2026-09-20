@@ -11,9 +11,21 @@ MAX_RECORDS = 1000
 AUDIO_DIR = r"S:\NoType_Audio"
 
 def ensure_audio_dir():
-    r"""確保 S:\NoType_Audio 目錄存在"""
+    r"""確保 S:\NoType_Audio 目錄存在並自動設定為隱藏資料夾 (+h)"""
     if not os.path.exists(AUDIO_DIR):
-        os.makedirs(AUDIO_DIR, exist_ok=True)
+        try:
+            os.makedirs(AUDIO_DIR, exist_ok=True)
+        except Exception:
+            pass
+    if os.path.exists(AUDIO_DIR):
+        try:
+            import ctypes
+            # FILE_ATTRIBUTE_HIDDEN = 0x02
+            attrs = ctypes.windll.kernel32.GetFileAttributesW(AUDIO_DIR)
+            if attrs != -1 and not (attrs & 2):
+                ctypes.windll.kernel32.SetFileAttributesW(AUDIO_DIR, attrs | 2)
+        except Exception:
+            pass
 
 def generate_audio_filename():
     """產生帶時間戳的音檔名，例如 20260920_123500.wav"""
