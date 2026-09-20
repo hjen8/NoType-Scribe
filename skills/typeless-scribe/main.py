@@ -1,6 +1,15 @@
 import sys
 import threading
 import os
+import ctypes
+
+# 0. Windows 單實例互斥鎖防護 (防止重複啟動導致 F9 鍵盤鉤子重複監聽、文字重複貼上兩次)
+kernel32 = ctypes.windll.kernel32
+_mutex = kernel32.CreateMutexW(None, False, "Local\\NoType_Typeless_Scribe_SingleInstance_Mutex")
+if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    if _mutex:
+        kernel32.CloseHandle(_mutex)
+    sys.exit(0)
 
 # 將所有的輸出導向至 run_log.txt，方便我們在背景模式 (pythonw) 時除錯
 log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_log.txt')
@@ -18,6 +27,9 @@ def create_image():
     dc = ImageDraw.Draw(image)
     dc.ellipse([16, 16, 48, 48], fill='#3498db')
     return image
+
+def on_open_history(icon, item):
+    ui.msg_queue.put('open_history')
 
 def on_open_settings(icon, item):
     ui.msg_queue.put('open_settings')
@@ -41,7 +53,8 @@ def run_tray():
         create_image(), 
         title='NoType 語音輔助', 
         menu=pystray.Menu(
-            pystray.MenuItem('設定 (Settings)', on_open_settings, default=True),
+            pystray.MenuItem('歷史紀錄 (History)', on_open_history, default=True),
+            pystray.MenuItem('設定 (Settings)', on_open_settings),
             pystray.MenuItem('編輯專屬字典 (Dictionary)', on_open_dictionary),
             pystray.MenuItem('離開 (Quit)', on_quit)
         )
@@ -55,8 +68,9 @@ def main():
     print(" 🚀 NoType 語音輔助常駐程式已啟動")
     print("=" * 50)
     print("操作方式：")
-    print("  按第一下 <F9> 鍵 : 開始錄音 (畫面右下角會提示)")
-    print("  按第二下 <F9> 鍵 : 停止錄音，並在游標處貼上 AI 修飾後的純文字")
+    print("  【錄音熱鍵：鍵盤右手邊 Alt 鍵】")
+    print("    1. 單擊切換 (Toggle)      : 按一下開始錄音，按第二下停止並貼上")
+    print("    2. 長按說話 (Hold-to-Talk): 按住右 Alt 說話，放開即停止並貼上")
     print("=" * 50)
     
     if not get_api_key():

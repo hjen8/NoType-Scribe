@@ -1,5 +1,8 @@
 import tkinter as tk
 import queue
+import os
+import subprocess
+import pyperclip
 from config_manager import get_api_key, set_api_key
 
 class UIManager:
@@ -9,6 +12,56 @@ class UIManager:
         self.msg_queue = queue.Queue()
         self.floating_win = None
         self.settings_win = None
+        self.history_win = None
+        self.toast_wins = []
+
+    def show_toast(self, text, bg="#c0392b", duration=3500):
+        try:
+            toast = tk.Toplevel(self.root)
+            toast.overrideredirect(True)
+            toast.attributes("-topmost", True)
+            toast.configure(bg=bg)
+            
+            lbl = tk.Label(
+                toast, 
+                text=text, 
+                font=("Microsoft JhengHei", 11, "bold"), 
+                fg="white", 
+                bg=bg, 
+                padx=15, 
+                pady=10,
+                justify="left",
+                wraplength=350
+            )
+            lbl.pack()
+            
+            toast.update_idletasks()
+            sw = toast.winfo_screenwidth()
+            sh = toast.winfo_screenheight()
+            w = toast.winfo_reqwidth()
+            h = toast.winfo_reqheight()
+            
+            # 顯示在主螢幕右下角
+            offset_y = 100 + (len(self.toast_wins) * (h + 10))
+            toast.geometry(f"{w}x{h}+{sw - w - 40}+{sh - offset_y}")
+            
+            self.toast_wins.append(toast)
+            
+            def close():
+                if toast in self.toast_wins:
+                    self.toast_wins.remove(toast)
+                try:
+                    toast.destroy()
+                except Exception:
+                    pass
+                    
+            toast.after(duration, close)
+        except Exception as e:
+            print(f"[Toast] Failed: {e}")
+
+    def toast(self, text, is_error=True, duration=3500):
+        bg = "#c0392b" if is_error else "#27ae60"
+        self.msg_queue.put(('show_toast', text, bg, duration))
 
     def show_floating(self):
         if self.floating_win:
@@ -43,37 +96,563 @@ class UIManager:
     def open_settings(self):
         if self.settings_win and self.settings_win.winfo_exists():
             self.settings_win.lift()
+            self.settings_win.focus_force()
             return
             
         self.settings_win = tk.Toplevel(self.root)
-        self.settings_win.title("NoType 設定")
-        self.settings_win.geometry("400x150")
+        self.settings_win.title("NoType 智慧核心與金鑰設定")
         self.settings_win.attributes("-topmost", True)
         
-        tk.Label(self.settings_win, text="Groq API Key:", font=("Microsoft JhengHei", 10)).pack(pady=10)
+        w, h = 480, 270
+        sw = self.settings_win.winfo_screenwidth()
+        sh = self.settings_win.winfo_screenheight()
+        self.settings_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         
-        entry = tk.Entry(self.settings_win, width=40, show="*")
-        entry.pack(pady=5)
-        entry.insert(0, get_api_key())
+        from config_manager import get_gemini_api_key, set_gemini_api_key
+        
+        # 1. Groq API Keys
+        tk.Label(
+            self.settings_win, 
+            text="Groq API Key (主要，支援多組以逗號或空格分隔自動輪替):", 
+            font=("Microsoft JhengHei", 9, "bold")
+        ).pack(anchor="w", padx=20, pady=(15, 2))
+        
+        entry_groq = tk.Entry(self.settings_win, width=54, show="*")
+        entry_groq.pack(padx=20, pady=2)
+        entry_groq.insert(0, get_api_key())
+        entry_groq.focus_set()
+        
+        # 2. Gemini API Key
+        tk.Label(
+            self.settings_win, 
+            text="Gemini API Key (選填，Groq 額度全滿時之自動備援):", 
+            font=("Microsoft JhengHei", 9, "bold")
+        ).pack(anchor="w", padx=20, pady=(12, 2))
+        
+        entry_gemini = tk.Entry(self.settings_win, width=54, show="*")
+        entry_gemini.pack(padx=20, pady=2)
+        entry_gemini.insert(0, get_gemini_api_key())
         
         def save():
-            set_api_key(entry.get())
+            set_api_key(entry_groq.get().strip())
+            set_gemini_api_key(entry_gemini.get().strip())
             self.settings_win.destroy()
-            print("API Key 已儲存")
+            print("API Keys saved")
+            self.toast("✅ API 金鑰設定已更新儲存！", is_error=False, duration=2500)
             
-        tk.Button(self.settings_win, text="儲存", command=save, font=("Microsoft JhengHei", 10)).pack(pady=10)
+        btn_frame = tk.Frame(self.settings_win)
+        btn_frame.pack(pady=18)
+        tk.Button(
+            btn_frame, 
+            text=" 儲存並啟用 ", 
+            command=save, 
+            bg="#27ae60", 
+            fg="white", 
+            font=("Microsoft JhengHei", 10, "bold"),
+            padx=10,
+            pady=2
+        ).pack()
+
+    # =====================================================
+    #  歷史紀錄面板 (Dark Theme History Panel)
+    # =====================================================
+    
+    # 色彩常數
+    BG_DARK   = "#1e1e1e"
+    BG_CARD   = "#2a2a2a"
+    BG_HOVER  = "#333333"
+    FG_TEXT   = "#e0e0e0"
+    FG_DIM    = "#888888"
+    FG_TIME   = "#aaaaaa"
+    TAG_GREEN = "#27ae60"
+    TAG_RED   = "#c0392b"
+    BTN_BG    = "#3a3a3a"
+    BTN_HOVER = "#4a4a4a"
+    
+    def open_history(self):
+        from history_manager import get_all, get_count
+        
+        if self.history_win and self.history_win.winfo_exists():
+            self.history_win.lift()
+            self.history_win.focus_force()
+            self._refresh_history()
+            return
+        
+        self.history_win = tk.Toplevel(self.root)
+        self.history_win.title("NoType 歷史紀錄")
+        self.history_win.configure(bg=self.BG_DARK)
+        self.history_win.attributes("-topmost", True)
+        
+        win_w, win_h = 720, 520
+        sw = self.history_win.winfo_screenwidth()
+        sh = self.history_win.winfo_screenheight()
+        self.history_win.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
+        self.history_win.minsize(600, 400)
+        
+        # 標題列
+        header = tk.Frame(self.history_win, bg=self.BG_DARK)
+        header.pack(fill="x", padx=20, pady=(15, 5))
+        
+        tk.Label(
+            header, text="歷史紀錄", 
+            font=("Microsoft JhengHei", 16, "bold"),
+            fg=self.FG_TEXT, bg=self.BG_DARK
+        ).pack(side="left")
+        
+        self._history_count_label = tk.Label(
+            header, text="",
+            font=("Microsoft JhengHei", 10),
+            fg=self.FG_DIM, bg=self.BG_DARK
+        )
+        self._history_count_label.pack(side="left", padx=(12, 0))
+        
+        # 重新整理按鈕
+        tk.Button(
+            header, text=" 重新整理 ",
+            font=("Microsoft JhengHei", 9),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground=self.BTN_HOVER, activeforeground=self.FG_TEXT,
+            bd=0, padx=8, pady=2,
+            command=self._refresh_history
+        ).pack(side="right")
+        
+        # 分隔線
+        tk.Frame(self.history_win, bg="#444444", height=1).pack(fill="x", padx=20, pady=(5, 0))
+        
+        # 可捲動區域
+        scroll_container = tk.Frame(self.history_win, bg=self.BG_DARK)
+        scroll_container.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        canvas = tk.Canvas(scroll_container, bg=self.BG_DARK, highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=canvas.yview)
+        
+        self._history_frame = tk.Frame(canvas, bg=self.BG_DARK)
+        self._history_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas_window = canvas.create_window((0, 0), window=self._history_frame, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 滑鼠滾輪綁定
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        self._history_canvas = canvas
+        
+        # 視窗關閉時解綁滾輪
+        def on_close():
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+            self.history_win.destroy()
+            self.history_win = None
+        self.history_win.protocol("WM_DELETE_WINDOW", on_close)
+        
+        self._refresh_history()
+    
+    def _refresh_history(self):
+        from history_manager import get_all, get_count
+        
+        if not self.history_win or not self.history_win.winfo_exists():
+            return
+        
+        # 清空舊卡片
+        for widget in self._history_frame.winfo_children():
+            widget.destroy()
+        
+        records = get_all()
+        count = get_count()
+        self._history_count_label.config(text=f"共 {count} 筆")
+        
+        if not records:
+            tk.Label(
+                self._history_frame, 
+                text="\n\n  按下 <右側 Alt> 開始錄音，歷史紀錄將在此顯示  \n\n",
+                font=("Microsoft JhengHei", 11),
+                fg=self.FG_DIM, bg=self.BG_DARK
+            ).pack(pady=60)
+            return
+        
+        for rec in records:
+            self._create_history_card(rec)
+    
+    def _create_history_card(self, rec):
+        card = tk.Frame(self._history_frame, bg=self.BG_CARD, padx=12, pady=10)
+        card.pack(fill="x", padx=10, pady=3)
+        
+        # --- 第一行：時間戳 + 狀態標籤 + 秒數 ---
+        top_row = tk.Frame(card, bg=self.BG_CARD)
+        top_row.pack(fill="x")
+        
+        # 時間戳
+        tk.Label(
+            top_row, text=rec.timestamp,
+            font=("Consolas", 9),
+            fg=self.FG_TIME, bg=self.BG_CARD
+        ).pack(side="left")
+        
+        # 狀態標籤
+        if rec.status == "success":
+            tag_text = " AI 整理 "
+            tag_bg = self.TAG_GREEN
+        else:
+            tag_text = " 轉換失敗 "
+            tag_bg = self.TAG_RED
+        
+        tag_label = tk.Label(
+            top_row, text=tag_text,
+            font=("Microsoft JhengHei", 8, "bold"),
+            fg="white", bg=tag_bg,
+            padx=4, pady=1
+        )
+        tag_label.pack(side="left", padx=(8, 0))
+        
+        # 右側按鈕區
+        btn_frame = tk.Frame(top_row, bg=self.BG_CARD)
+        btn_frame.pack(side="right")
+        
+        # 秒數
+        tk.Label(
+            btn_frame, text=f"{rec.duration_sec} 秒",
+            font=("Consolas", 9),
+            fg=self.FG_DIM, bg=self.BG_CARD
+        ).pack(side="left", padx=(0, 10))
+        
+        # 1. 複製按鈕 (最高頻使用，置於最左側)
+        text_to_copy = rec.refined_text
+        copy_btn = tk.Button(
+            btn_frame, text=" 📋 ",
+            font=("Segoe UI Emoji", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground=self.BTN_HOVER, activeforeground="white",
+            bd=0, padx=4, pady=0,
+            command=lambda t=text_to_copy: self._copy_text(t)
+        )
+        copy_btn.pack(side="left", padx=2)
+        
+        # 2. 重播按鈕
+        audio_path = rec.audio_path
+        play_btn = tk.Button(
+            btn_frame, text=" ▷ ",
+            font=("Consolas", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground=self.BTN_HOVER, activeforeground="white",
+            bd=0, padx=4, pady=0,
+            command=lambda p=audio_path: self._play_audio(p)
+        )
+        play_btn.pack(side="left", padx=2)
+        
+        # 3. 重新辨識按鈕
+        rerun_btn = tk.Button(
+            btn_frame, text=" 🔄 ",
+            font=("Segoe UI Emoji", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground=self.BTN_HOVER, activeforeground="white",
+            bd=0, padx=4, pady=0,
+            command=lambda r=rec: self._reprocess_record(r)
+        )
+        rerun_btn.pack(side="left", padx=2)
+        
+        # 4. 糾錯學習按鈕
+        edit_btn = tk.Button(
+            btn_frame, text=" ✏️ ",
+            font=("Segoe UI Emoji", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground=self.BTN_HOVER, activeforeground="white",
+            bd=0, padx=4, pady=0,
+            command=lambda r=rec: self._open_correction_dialog(r)
+        )
+        edit_btn.pack(side="left", padx=2)
+        
+        # --- 第二行：修飾後文字 ---
+        display_text = rec.refined_text if rec.refined_text else rec.raw_text
+        # 截斷過長文字
+        if len(display_text) > 120:
+            display_text = display_text[:120] + "..."
+        
+        tk.Label(
+            card, text=display_text,
+            font=("Microsoft JhengHei", 10),
+            fg=self.FG_TEXT, bg=self.BG_CARD,
+            anchor="w", justify="left",
+            wraplength=620
+        ).pack(fill="x", pady=(6, 0))
+    
+    def _reprocess_record(self, rec):
+        if not rec.audio_path or not os.path.exists(rec.audio_path):
+            self.toast("⚠️ 原始音檔不存在或已被清除", is_error=True, duration=2500)
+            return
+            
+        self.toast("⏳ 正在以最新詞庫重新辨識中...", is_error=False, duration=2500)
+        
+        import threading
+        def worker():
+            try:
+                from groq_api import transcribe_audio, generate_notes
+                raw = transcribe_audio(rec.audio_path)
+                if not raw or not raw.strip():
+                    self.toast("⚠️ 未偵測到有效語音", is_error=True, duration=2500)
+                    return
+                refined = generate_notes(raw)
+                rec.raw_text = raw.strip()
+                rec.refined_text = refined
+                rec.status = "success"
+                rec.error_msg = ""
+                self.msg_queue.put('refresh_history')
+                self.toast("✅ 重新辨識完成！", is_error=False, duration=2500)
+            except Exception as e:
+                self.toast(f"❌ 重新辨識失敗: {e}", is_error=True, duration=3500)
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _open_correction_dialog(self, rec):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("NoType 糾錯與自適應學習")
+        dialog.configure(bg=self.BG_DARK)
+        dialog.attributes("-topmost", True)
+        
+        win_w, win_h = 520, 390
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
+        
+        # 標題
+        tk.Label(
+            dialog, text="✏️ 糾錯與自適應學習",
+            font=("Microsoft JhengHei", 13, "bold"),
+            fg=self.FG_TEXT, bg=self.BG_DARK
+        ).pack(anchor="w", padx=20, pady=(15, 5))
+        
+        # 整句修改
+        tk.Label(
+            dialog, text="1. 修正後的完整文字 (更新此卡片顯示):",
+            font=("Microsoft JhengHei", 9, "bold"),
+            fg=self.FG_TIME, bg=self.BG_DARK
+        ).pack(anchor="w", padx=20, pady=(8, 2))
+        
+        entry_full = tk.Entry(dialog, width=58, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_full.pack(padx=20, pady=2)
+        curr_text = rec.refined_text if rec.refined_text else rec.raw_text
+        entry_full.insert(0, curr_text)
+        entry_full.focus_set()
+        
+        # 分隔線
+        tk.Frame(dialog, bg="#444444", height=1).pack(fill="x", padx=20, pady=12)
+        
+        tk.Label(
+            dialog, text="2. 教 AI 專屬詞彙 (自動建立學習記憶，未來永久自動校正):",
+            font=("Microsoft JhengHei", 9, "bold"),
+            fg="#f39c12", bg=self.BG_DARK
+        ).pack(anchor="w", padx=20, pady=(2, 6))
+        
+        pair_frame = tk.Frame(dialog, bg=self.BG_DARK)
+        pair_frame.pack(fill="x", padx=20)
+        
+        # 左：聽錯的詞
+        left_col = tk.Frame(pair_frame, bg=self.BG_DARK)
+        left_col.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        tk.Label(left_col, text="AI 聽錯的詞 (選填):", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
+        entry_wrong = tk.Entry(left_col, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_wrong.pack(fill="x", pady=2)
+        
+        # 右：真正要表達的詞
+        right_col = tk.Frame(pair_frame, bg=self.BG_DARK)
+        right_col.pack(side="right", fill="x", expand=True, padx=(10, 0))
+        tk.Label(right_col, text="真正正確的詞 (自動存入字典):", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
+        entry_correct = tk.Entry(right_col, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_correct.pack(fill="x", pady=2)
+        
+        hint_lbl = tk.Label(
+            dialog, 
+            text="💡 例如：聽錯「實心營」➔ 正確「石星瑩」，儲存後未來再說這句話就會 100% 正確！",
+            font=("Microsoft JhengHei", 8),
+            fg="#95a5a6", bg=self.BG_DARK
+        )
+        hint_lbl.pack(anchor="w", padx=20, pady=(8, 15))
+        
+        # 按鈕區
+        def save():
+            from learning_manager import add_correction
+            new_sentence = entry_full.get().strip()
+            if new_sentence:
+                rec.refined_text = new_sentence
+                rec.status = "success"
+                
+            wrong = entry_wrong.get().strip()
+            correct = entry_correct.get().strip()
+            if correct:
+                add_correction(wrong, correct)
+                self.toast(f"✅ 已學習專屬詞彙：{correct}！", is_error=False, duration=2500)
+            else:
+                self.toast("✅ 歷史紀錄文字已更新！", is_error=False, duration=2000)
+                
+            dialog.destroy()
+            self._refresh_history()
+            
+        btn_box = tk.Frame(dialog, bg=self.BG_DARK)
+        btn_box.pack(pady=(5, 15))
+        
+        tk.Button(
+            btn_box, text=" 儲存並學習 ", command=save,
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=12, pady=4
+        ).pack(side="left", padx=10)
+        
+        tk.Button(
+            btn_box, text=" 取消 ", command=dialog.destroy,
+            font=("Microsoft JhengHei", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
+        ).pack(side="left", padx=10)
+    
+    def _play_audio(self, audio_path):
+        if audio_path and os.path.exists(audio_path):
+            try:
+                import winsound
+                # 優先使用 Windows 內建非同步播放，背景播放無彈窗
+                winsound.PlaySound(audio_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            except Exception:
+                try:
+                    os.startfile(audio_path)
+                except Exception as e:
+                    self.toast(f"無法播放音檔: {e}", is_error=True, duration=3000)
+        else:
+            self.toast("音檔不存在或已被清除", is_error=True, duration=2500)
+    
+    def _copy_text(self, text):
+        try:
+            pyperclip.copy(text)
+            self.toast("✅ 已複製到剪貼簿！", is_error=False, duration=1500)
+        except Exception as e:
+            self.toast(f"複製失敗: {e}", is_error=True, duration=2500)
+
+    def open_quick_learn(self, wrong_text="", on_saved=None):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("NoType 極速糾錯學習")
+        dialog.configure(bg=self.BG_DARK)
+        dialog.attributes("-topmost", True)
+        
+        win_w, win_h = 460, 290
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
+        
+        tk.Label(
+            dialog, text="✏️ 極速教學與詞彙學習",
+            font=("Microsoft JhengHei", 12, "bold"),
+            fg=self.FG_TEXT, bg=self.BG_DARK
+        ).pack(anchor="w", padx=20, pady=(12, 4))
+        
+        # 聽錯的詞
+        row1 = tk.Frame(dialog, bg=self.BG_DARK)
+        row1.pack(fill="x", padx=20, pady=3)
+        tk.Label(row1, text="聽錯的詞：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        entry_wrong = tk.Entry(row1, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_wrong.pack(side="left", fill="x", expand=True)
+        if wrong_text:
+            entry_wrong.insert(0, wrong_text)
+            
+        # 正確的詞
+        row2 = tk.Frame(dialog, bg=self.BG_DARK)
+        row2.pack(fill="x", padx=20, pady=4)
+        tk.Label(row2, text="正確的詞：", font=("Microsoft JhengHei", 9, "bold"), fg="#f39c12", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        entry_correct = tk.Entry(row2, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_correct.pack(side="left", fill="x", expand=True)
+        entry_correct.focus_set()
+        
+        # 提示標籤
+        hint_text = "💡「僅本次替換」只修改當前選取文字；「永久學習」會一併存入字典供日後自動校正"
+        lbl_hint = tk.Label(
+            dialog, 
+            text=hint_text, 
+            font=("Microsoft JhengHei", 8),
+            fg="#95a5a6", bg=self.BG_DARK
+        )
+        lbl_hint.pack(anchor="w", padx=20, pady=(6, 15))
+        
+        # 動作 1：僅本次替換 (不存入字典)
+        def replace_once(event=None):
+            correct = entry_correct.get().strip()
+            dialog.destroy()
+            if correct:
+                self.toast(f"✅ 已替換文字為「{correct}」（未存入字典）！", is_error=False, duration=2000)
+                if on_saved:
+                    on_saved(correct)
+                    
+        # 動作 2：永久學習並替換
+        def replace_and_learn(event=None):
+            wrong = entry_wrong.get().strip()
+            correct = entry_correct.get().strip()
+            dialog.destroy()
+            if correct:
+                from learning_manager import add_correction
+                add_correction(wrong, correct)
+                self.toast(f"✅ 已替換並永久學習新詞「{correct}」！", is_error=False, duration=2500)
+                if on_saved:
+                    on_saved(correct)
+            
+        def cancel(event=None):
+            dialog.destroy()
+            
+        # 鍵盤快捷鍵綁定
+        dialog.bind("<Return>", replace_once)
+        dialog.bind("<Shift-Return>", replace_and_learn)
+        dialog.bind("<Escape>", cancel)
+        
+        # 三大按鈕區
+        btn_box = tk.Frame(dialog, bg=self.BG_DARK)
+        btn_box.pack(pady=4)
+        
+        # 1. 僅本次替換
+        tk.Button(
+            btn_box, text=" 僅本次替換 (Enter) ", command=replace_once,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=10, pady=4
+        ).pack(side="left", padx=6)
+        
+        # 2. 永久學習並替換
+        tk.Button(
+            btn_box, text=" 永久學習並替換 (Shift+Enter) ", command=replace_and_learn,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=10, pady=4
+        ).pack(side="left", padx=6)
+        
+        # 3. 取消
+        tk.Button(
+            btn_box, text=" 取消 (Esc) ", command=cancel,
+            font=("Microsoft JhengHei", 9),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
+        ).pack(side="left", padx=6)
 
     def process_queue(self):
         try:
             while True:
-                msg = self.msg_queue.get_nowait()
-                if msg == 'show_floating':
+                item = self.msg_queue.get_nowait()
+                if isinstance(item, tuple) and item[0] == 'show_toast':
+                    _, text, bg, duration = item
+                    self.show_toast(text, bg, duration)
+                elif isinstance(item, tuple) and item[0] == 'open_quick_learn':
+                    _, wrong_text, callback = item
+                    self.open_quick_learn(wrong_text, callback)
+                elif item == 'show_floating':
                     self.show_floating()
-                elif msg == 'hide_floating':
+                elif item == 'hide_floating':
                     self.hide_floating()
-                elif msg == 'open_settings':
+                elif item == 'open_settings':
                     self.open_settings()
-                elif msg == 'quit':
+                elif item == 'open_history':
+                    self.open_history()
+                elif item == 'refresh_history':
+                    if self.history_win and self.history_win.winfo_exists():
+                        self._refresh_history()
+                elif item == 'quit':
                     self.root.quit()
         except queue.Empty:
             pass

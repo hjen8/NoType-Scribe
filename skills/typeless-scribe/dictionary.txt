@@ -1,11 +1,74 @@
 # 在此輸入您的專屬詞彙，每行一個。
 # AI 會優先參考這些詞彙來修正語音辨識。
 
+# 系統與工作流指令
 開工
 收工
+最高SOP
+專案SOP
+SOP
+Skill
+待辦
+待辦事項
+儀表板
+流水號
+打勾
+打叉
+去除
+偏好
+編號
+覆盤
+回測台
+操盤台
 
+# 軟硬體、工具與擴充
+ap
+Line Bank
+Codex
+key.txt
+.docx
+Heptabase
+drive
+NOD32
+Google Classroom
+Obsidian
+Teaching-helper
+A+
+pdf
+LINE
+SSD
+\gsdata\saved
+content.js
+Avast
+Gemini 對話
+Gem
+Voyager
+18T
+IT
+MD檔
+docx
+THX
+OK
+Secure Browser
+OpenCode
+Antigravity
+Git
+MyOneNoteClipper
+zoom-in
+dropbox
+Xmind
+HDMI公頭
+Crack
+chk
+backup
+Surface
+chrome
+SnY
+manifest.json
+office2024
+iOS
 
-# 家人
+# 家人與親友
 石懷仁
 張杏枝
 石星瑩
@@ -28,15 +91,105 @@
 張施哖
 張武柏
 張武正
+爸爸葯
+星詠瑩
+石家大小事
+阿媽
+懷聖
+佩琦
+武正
+佩玲
+武柏
+懷敏
+金枝
+懷斌
 
-# top同學
+# 學校、班級與教學
+翰林
+暑輔
+建照科
+恭班
+讓班
+學習寶典
+高一
+景美女中
+試院里
+半公家機關
+黃卷
+CMGSH
+二下2段
+題組題
+翰林版
+小論文
+學測
+儉班
+和興路
+員樹林國小
+會考
+三年誠班
+龍騰
+景女
+良恭
+中學數學
+高中數學
+模考題
+小老師
+
+# 地理、數學與學術名詞
+乘法
+除法
+斷斷續續
+喀斯特地形
+探究與實作
+自給性農牧業
+地歷公
+夏雨集中度
+進位
+應用地理
+潮汐樹
+對稱出極值
+測地線
+
+# 學生、同事與人名
+沈政男
+王貞云
 許安潔
 陳語昕
 曾省峿
 陳霈沄
 文培亦
-許榕容
+孟蓉
+邱捷
+基泰
+黃先生
+UNI
+信良
+惠如
+子茜
+慧英
+李S
+霈沄
+省峿
+培亦
+語昕
 
-# 地理
-喀斯特地形
-探究與實作
+# 生活、金融與其他常用專有名詞
+樂天銀行
+補習
+預付卡
+便利
+cube卡
+po文
+傳真
+表號
+吉鶴
+圈圈6
+E:\
+where
+Ask
+午安
+PO出
+po
+檔案
+五香片
+洛神花乾

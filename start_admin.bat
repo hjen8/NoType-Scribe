@@ -11,4 +11,5 @@ if %errorLevel% == 0 (
 )
 
 :run
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*typeless-scribe*main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 start "" "e:\AI_Work\NoType\skills\typeless-scribe\venv\Scripts\pythonw.exe" "e:\AI_Work\NoType\skills\typeless-scribe\main.py"
