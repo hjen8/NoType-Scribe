@@ -3,18 +3,20 @@ import threading
 import os
 import ctypes
 
-# 0. Windows 單實例互斥鎖防護 (防止重複啟動導致鍵盤鉤子重複監聽、文字重複貼上兩次)
-kernel32 = ctypes.windll.kernel32
-_mutex = kernel32.CreateMutexW(None, False, "Local\\NoType_Typeless_Scribe_SingleInstance_Mutex")
-if kernel32.GetLastError() in (183, 5):  # ERROR_ALREADY_EXISTS or ERROR_ACCESS_DENIED
-    if _mutex:
-        kernel32.CloseHandle(_mutex)
-    os._exit(0)
-
 # 將所有的輸出導向至 run_log.txt，方便我們在背景模式 (pythonw) 時除錯
 log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_log.txt')
 sys.stdout = open(log_path, 'a', encoding='utf-8', buffering=1)
 sys.stderr = sys.stdout
+
+# 0. Windows 單實例互斥鎖防護 (防止重複啟動導致鍵盤鉤子重複監聽、文字重複貼上兩次)
+kernel32 = ctypes.windll.kernel32
+_mutex = kernel32.CreateMutexW(None, False, "Local\\NoType_Typeless_Scribe_SingleInstance_Mutex")
+last_err = kernel32.GetLastError()
+if last_err in (183, 5):  # ERROR_ALREADY_EXISTS or ERROR_ACCESS_DENIED
+    print(f"\n[Mutex] 偵測到已有另一實例執行中或互斥鎖衝突 (LastError={last_err})，程式退出。")
+    if _mutex:
+        kernel32.CloseHandle(_mutex)
+    os._exit(0)
 
 from PIL import Image, ImageDraw
 import pystray

@@ -269,6 +269,14 @@ class KeyboardManager:
             refined_text = generate_notes(transcript, on_model_switch=notify_switch, app_mode=app_mode)
             print(f"[LLM] Done ({time.time()-start:.1f}s): {refined_text}")
             
+            # 【物理層零空值熔斷保險 (Zero-Empty Fallback)】
+            # 若 LLM 回傳空字串或僅含空白，強制自動降級使用原始逐字稿，徹底杜絕空字串存檔與貼空
+            if not refined_text or not refined_text.strip():
+                print("[LLM Fallback] ⚠️ LLM 回傳空字串，自動降級使用原始逐字稿！")
+                refined_text = transcript.strip()
+            else:
+                refined_text = refined_text.strip()
+            
             record.status = "success"
             record.refined_text = refined_text
             add_record(record)

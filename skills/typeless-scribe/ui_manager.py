@@ -328,8 +328,9 @@ class UIManager:
             fg=self.FG_DIM, bg=self.BG_CARD
         ).pack(side="left", padx=(0, 10))
         
-        # 1. 複製按鈕 (最高頻使用，置於最左側)
-        text_to_copy = rec.refined_text
+        # 1. 複製按鈕 (最高頻使用，置於最左側)：所見即所得，優先取修飾文字，若無則取逐字稿
+        text_to_copy = (rec.refined_text.strip() if (rec.refined_text and rec.refined_text.strip()) 
+                        else (rec.raw_text.strip() if rec.raw_text else ""))
         copy_btn = tk.Button(
             btn_frame, text=" 📋 ",
             font=("Segoe UI Emoji", 10),
@@ -405,7 +406,7 @@ class UIManager:
                     return
                 refined = generate_notes(raw)
                 rec.raw_text = raw.strip()
-                rec.refined_text = refined
+                rec.refined_text = refined.strip() if (refined and refined.strip()) else raw.strip()
                 rec.status = "success"
                 rec.error_msg = ""
                 self.msg_queue.put('refresh_history')
@@ -529,8 +530,19 @@ class UIManager:
             self.toast("音檔不存在或已被清除", is_error=True, duration=2500)
     
     def _copy_text(self, text):
+        if not text or not str(text).strip():
+            self.toast("⚠️ 該紀錄無有效文字可複製", is_error=True, duration=2500)
+            return
+        target = str(text).strip()
         try:
-            pyperclip.copy(text)
+            pyperclip.copy(target)
+            # 雙重防護：同步寫入 Tkinter 剪貼簿，避免 Windows 剪貼簿鎖定導致的寫入失敗
+            try:
+                self.root.clipboard_clear()
+                self.root.clipboard_append(target)
+                self.root.update()
+            except Exception:
+                pass
             self.toast("✅ 已複製到剪貼簿！", is_error=False, duration=1500)
         except Exception as e:
             self.toast(f"複製失敗: {e}", is_error=True, duration=2500)
