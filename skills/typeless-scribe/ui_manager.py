@@ -809,10 +809,21 @@ class UIManager:
                 for c in self._dict_tree.get_children():
                     self._dict_tree.item(c, open=True)
                     
+        def expand_all():
+            if hasattr(self, '_dict_tree'):
+                def _open_rec(parent=""):
+                    for c in self._dict_tree.get_children(parent):
+                        self._dict_tree.item(c, open=True)
+                        _open_rec(c)
+                _open_rec("")
+                    
         def collapse_all():
             if hasattr(self, '_dict_tree'):
-                for c in self._dict_tree.get_children():
-                    self._dict_tree.item(c, open=False)
+                def _close_rec(parent=""):
+                    for c in self._dict_tree.get_children(parent):
+                        self._dict_tree.item(c, open=False)
+                        _close_rec(c)
+                _close_rec("")
                     
         tk.Button(
             search_box, text=" ➕ 展開全部 ", command=expand_all,
@@ -820,6 +831,43 @@ class UIManager:
         ).pack(side="left", padx=2)
         tk.Button(
             search_box, text=" ➖ 全部收起 ", command=collapse_all,
+            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+        ).pack(side="left", padx=2)
+        
+        # 分類上下順序移動
+        def move_selected_category(direction):
+            sel = self._dict_tree.selection()
+            if not sel:
+                self.toast("⚠️ 請先在列表中點選欲調整順序的分類節點", is_error=True, duration=2000)
+                return
+            item_id = sel[0]
+            tags = self._dict_tree.item(item_id, "tags")
+            if "category_l1" in tags:
+                cat_ident = item_id.replace("cat_l1_", "")
+            elif "category_l2" in tags:
+                cat_ident = item_id.replace("cat_l2_", "")
+            else:
+                self.toast("⚠️ 只能移動「分類節點」的順序，不能移動單一詞彙", is_error=True, duration=2000)
+                return
+                
+            import dictionary_manager
+            if dictionary_manager.move_category(cat_ident, direction):
+                action_text = "上移" if direction == "up" else "下移"
+                display_name = cat_ident.split(" / ")[-1]
+                self.toast(f"✅ 已{action_text}分類【{display_name}】！", is_error=False, duration=1500)
+                self._refresh_dictionary_list()
+                if self._dict_tree.exists(item_id):
+                    self._dict_tree.selection_set(item_id)
+                    self._dict_tree.see(item_id)
+            else:
+                self.toast("⚠️ 已達該層級頂部或底部，無法再移動", is_error=True, duration=1500)
+                
+        tk.Button(
+            search_box, text=" ⬆️ 上移分類 ", command=lambda: move_selected_category("up"),
+            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+        ).pack(side="left", padx=(10, 2))
+        tk.Button(
+            search_box, text=" ⬇️ 下移分類 ", command=lambda: move_selected_category("down"),
             font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
         ).pack(side="left", padx=2)
         
@@ -858,7 +906,8 @@ class UIManager:
         self._dict_tree.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self._dict_tree.yview)
         
-        self._dict_tree.tag_configure("category", font=("Microsoft JhengHei", 10, "bold"), foreground="#f1c40f")
+        self._dict_tree.tag_configure("category_l1", font=("Microsoft JhengHei", 10, "bold"), foreground="#f1c40f")
+        self._dict_tree.tag_configure("category_l2", font=("Microsoft JhengHei", 9, "bold"), foreground="#3498db")
         self._dict_tree.tag_configure("word", font=("Microsoft JhengHei", 9), foreground="#ecf0f1")
         
         # 單擊展開/收起樹狀目錄 (點一下展開，再點一下收起)
@@ -866,17 +915,27 @@ class UIManager:
             item_id = self._dict_tree.identify_row(event.y)
             if not item_id:
                 return
-            # 若為分類節點 (父層為空)
-            if not self._dict_tree.parent(item_id):
+            tags = self._dict_tree.item(item_id, "tags")
+            # 若為分類節點 (大類或子類)
+            if "category_l1" in tags or "category_l2" in tags:
                 element = self._dict_tree.identify_element(event.x, event.y)
                 # 排除原生小箭頭 (原生小箭頭已被 Tkinter 自動切換)
                 if element != "Treeitem.indicator":
                     is_open = self._dict_tree.item(item_id, "open")
                     self._dict_tree.item(item_id, open=not is_open)
-                # 自動將底部新增分類選單切換至該分類
-                cat_name = item_id.replace("cat_", "")
-                if hasattr(self, '_dict_cat_var') and self._dict_cat_var:
-                    self._dict_cat_var.set(cat_name)
+                
+                # 自動連動底部新增分類選單
+                if "category_l1" in tags:
+                    cat_name = item_id.replace("cat_l1_", "")
+                    if hasattr(self, '_dict_cat_menu') and self._dict_cat_menu:
+                        options = self._dict_cat_menu['values']
+                        matching = [opt for opt in options if opt == cat_name or opt.startswith(f"{cat_name} / ")]
+                        if matching and hasattr(self, '_dict_cat_var'):
+                            self._dict_cat_var.set(matching[0])
+                elif "category_l2" in tags:
+                    cat_path = item_id.replace("cat_l2_", "")
+                    if hasattr(self, '_dict_cat_var'):
+                        self._dict_cat_var.set(cat_path)
             else:
                 # 若點選為子項目詞彙，連動所屬分類
                 vals = self._dict_tree.item(item_id, "values")
@@ -911,19 +970,32 @@ class UIManager:
         
         def do_add_word(event=None):
             val = self._dict_add_var.get().strip()
-            cat = self._dict_cat_var.get().strip() if hasattr(self, '_dict_cat_var') else "地理-氣候水文與大氣"
+            cat = self._dict_cat_var.get().strip() if hasattr(self, '_dict_cat_var') else "地理 / 氣候水文與大氣"
             if val:
                 if dictionary_manager.add_word(val, category=cat):
                     self.toast(f"✅ 已新增「{val}」至【{cat}】！", is_error=False, duration=2000)
                     self._dict_add_var.set("")
                     self._refresh_dictionary_list()
-                    cat_id = f"cat_{cat}"
-                    if self._dict_tree.exists(cat_id):
-                        self._dict_tree.item(cat_id, open=True)
-                        word_id = f"word_{cat}_{val}"
-                        if self._dict_tree.exists(word_id):
-                            self._dict_tree.selection_set(word_id)
-                            self._dict_tree.see(word_id)
+                    if " / " in cat:
+                        p, s = cat.split(" / ", 1)
+                        cat_l1_id = f"cat_l1_{p}"
+                        if self._dict_tree.exists(cat_l1_id):
+                            self._dict_tree.item(cat_l1_id, open=True)
+                        sub_id = f"cat_l2_{cat}"
+                        if self._dict_tree.exists(sub_id):
+                            self._dict_tree.item(sub_id, open=True)
+                            word_id = f"word_{p}_{s}_{val}"
+                            if self._dict_tree.exists(word_id):
+                                self._dict_tree.selection_set(word_id)
+                                self._dict_tree.see(word_id)
+                    else:
+                        cat_id = f"cat_l1_{cat}"
+                        if self._dict_tree.exists(cat_id):
+                            self._dict_tree.item(cat_id, open=True)
+                            word_id = f"word_{cat}_{val}"
+                            if self._dict_tree.exists(word_id):
+                                self._dict_tree.selection_set(word_id)
+                                self._dict_tree.see(word_id)
                 else:
                     self.toast(f"⚠️ 詞彙「{val}」已存在或無效", is_error=True, duration=2500)
                     
@@ -993,17 +1065,18 @@ class UIManager:
         import dictionary_manager
         if not hasattr(self, '_dict_tree') or not self._dict_tree:
             return
-        self._all_categorized_words = dictionary_manager.load_categorized_words()
-        total_words = sum(len(w) for w in self._all_categorized_words.values())
-        total_cats = len(self._all_categorized_words)
+        self._hierarchy = dictionary_manager.load_hierarchy()
+        total_words = len(dictionary_manager.load_words())
+        total_cats = len(self._hierarchy)
         if hasattr(self, '_dict_count_lbl') and self._dict_count_lbl:
             self._dict_count_lbl.config(text=f"目前收錄 {total_words} 筆專用詞彙（共 {total_cats} 大分類，AI 優先參考修正）")
             
         if hasattr(self, '_dict_cat_menu') and self._dict_cat_menu:
-            cat_list = list(self._all_categorized_words.keys())
+            cat_list = dictionary_manager.get_categories()
             self._dict_cat_menu['values'] = cat_list
             if (not self._dict_cat_var.get() or self._dict_cat_var.get() not in cat_list) and cat_list:
-                self._dict_cat_var.set("地理-氣候水文與大氣" if "地理-氣候水文與大氣" in cat_list else cat_list[0])
+                pref = "地理 / 氣候水文與大氣"
+                self._dict_cat_var.set(pref if pref in cat_list else cat_list[0])
                 
         self._filter_dictionary_list()
 
@@ -1011,29 +1084,82 @@ class UIManager:
         if not hasattr(self, '_dict_tree') or not self._dict_tree:
             return
             
-        # 記錄現有分類的展開狀態
+        # 記錄現有分類的展開狀態 (遞迴蒐集)
         expanded_cats = set()
-        for c in self._dict_tree.get_children():
-            if self._dict_tree.item(c, "open"):
-                expanded_cats.add(c)
+        def _collect_expanded(parent=""):
+            for c in self._dict_tree.get_children(parent):
+                if self._dict_tree.item(c, "open"):
+                    expanded_cats.add(c)
+                _collect_expanded(c)
+        _collect_expanded("")
                 
         query = self._dict_search_var.get().strip().lower() if hasattr(self, '_dict_search_var') else ""
         self._dict_tree.delete(*self._dict_tree.get_children())
-        all_cats = getattr(self, '_all_categorized_words', {})
+        hierarchy = getattr(self, '_hierarchy', [])
         
-        for cat_name, words in all_cats.items():
-            matching_words = [w for w in words if not query or query in w.lower()]
-            if query and not matching_words:
-                continue
-                
-            cat_id = f"cat_{cat_name}"
-            # 搜尋模式時自動展開匹配分類，一般模式預設收起 (若先前已展開則保持)
-            should_open = bool(query) or (cat_id in expanded_cats)
-            cat_text = f"📁 {cat_name} ({len(matching_words)})"
-            self._dict_tree.insert("", "end", iid=cat_id, text=cat_text, open=should_open, tags=("category",))
+        for cat in hierarchy:
+            cat_name = cat.get("name", "")
+            subs = cat.get("subcategories", [])
+            cat_words = cat.get("words", [])
             
-            for w in matching_words:
-                self._dict_tree.insert(cat_id, "end", iid=f"word_{cat_name}_{w}", text=f"  {w}", tags=("word",), values=(w, cat_name))
+            # 若有子分類 (二層樹狀結構)
+            if subs:
+                sub_matches = []
+                for sub in subs:
+                    sub_name = sub.get("name", "")
+                    matching_w = [w for w in sub.get("words", []) if not query or query in w.lower()]
+                    if not query or matching_w or query in sub_name.lower():
+                        sub_matches.append((sub_name, matching_w))
+                        
+                if query and not sub_matches and query not in cat_name.lower():
+                    continue
+                    
+                total_cat_words = sum(len(w_list) for _, w_list in sub_matches)
+                cat_id = f"cat_l1_{cat_name}"
+                should_open_cat = bool(query) or (cat_id in expanded_cats)
+                self._dict_tree.insert(
+                    "", "end", iid=cat_id, 
+                    text=f"📁 {cat_name} ({total_cat_words})", 
+                    open=should_open_cat, 
+                    tags=("category_l1",)
+                )
+                
+                for sub_name, matching_w in sub_matches:
+                    sub_id = f"cat_l2_{cat_name} / {sub_name}"
+                    should_open_sub = bool(query) or (sub_id in expanded_cats)
+                    self._dict_tree.insert(
+                        cat_id, "end", iid=sub_id,
+                        text=f"📂 {sub_name} ({len(matching_w)})",
+                        open=should_open_sub,
+                        tags=("category_l2",)
+                    )
+                    for w in matching_w:
+                        self._dict_tree.insert(
+                            sub_id, "end", iid=f"word_{cat_name}_{sub_name}_{w}",
+                            text=f"  {w}",
+                            tags=("word",),
+                            values=(w, f"{cat_name} / {sub_name}")
+                        )
+            else:
+                # 單層分類
+                matching_words = [w for w in cat_words if not query or query in w.lower()]
+                if query and not matching_words and query not in cat_name.lower():
+                    continue
+                cat_id = f"cat_l1_{cat_name}"
+                should_open = bool(query) or (cat_id in expanded_cats)
+                self._dict_tree.insert(
+                    "", "end", iid=cat_id,
+                    text=f"📁 {cat_name} ({len(matching_words)})",
+                    open=should_open,
+                    tags=("category_l1",)
+                )
+                for w in matching_words:
+                    self._dict_tree.insert(
+                        cat_id, "end", iid=f"word_{cat_name}_{w}",
+                        text=f"  {w}",
+                        tags=("word",),
+                        values=(w, cat_name)
+                    )
 
     def _prompt_import_dictionary(self):
         from tkinter import filedialog

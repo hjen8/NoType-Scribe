@@ -82,3 +82,7 @@ examples
 .codex
 .opencode
 .cursor
+
+# User private history
+history.json
+skills/typeless-scribe/history.json

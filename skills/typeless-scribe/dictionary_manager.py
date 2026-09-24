@@ -1,5 +1,7 @@
 """
 NoType 專屬字典管理器 (Dictionary Manager)
+- 支援 Markdown 兩層結構 (# 大分類, ## 子分類)
+- 支援分類上下順序調整 (move_category)
 - 支援 dictionary.txt 的讀取、寫入、去重複
 - 支援自適應編碼匯入 (UTF-8-BOM / UTF-8 / CP950 / GB18030)
 - 支援「合併增補 (Merge)」與「完全覆蓋 (Overwrite)」雙模式
@@ -29,18 +31,31 @@ def ensure_dictionary_file():
         except Exception as e:
             print(f"[Dictionary] Error creating dictionary.txt: {e}")
 
-def load_categorized_words() -> dict[str, list[str]]:
+def load_hierarchy() -> list[dict]:
     """
-    載入字典中依分類整理的詞彙字典：
-    {
-        "系統與工作流指令": ["開工", "收工", ...],
-        "軟硬體、工具與擴充": ["S磁碟", ...],
+    載入兩層結構的階層資料：
+    [
+        {
+            "name": "系統與工作流指令",
+            "words": ["開工", "收工", ...],
+            "subcategories": []
+        },
+        {
+            "name": "地理",
+            "words": [],
+            "subcategories": [
+                {"name": "氣候水文與大氣", "words": [...]},
+                {"name": "地形與地質", "words": [...]},
+                {"name": "地圖GIS與人文經濟", "words": [...]}
+            ]
+        },
         ...
-    }
+    ]
     """
     ensure_dictionary_file()
-    categories = {}
-    current_cat = "未分類專用詞"
+    hierarchy = []
+    current_cat = None
+    current_sub = None
     seen_all = set()
     
     try:
@@ -51,136 +66,232 @@ def load_categorized_words() -> dict[str, list[str]]:
                     continue
                 if line.startswith("#"):
                     # 排除全域引導註解
-                    if line.startswith("# 在此") or line.startswith("# AI") or line.startswith("# NoType") or line.startswith("# 總詞數") or line.startswith("# 由外部"):
+                    if (line.startswith("# 在此") or line.startswith("# AI") or 
+                        line.startswith("# NoType") or line.startswith("# 總詞數") or 
+                        line.startswith("# 由外部") or line.startswith("# 匯出時間")):
                         continue
-                    cat_name = line.lstrip("#").strip()
-                    if cat_name:
-                        current_cat = cat_name
-                        if current_cat not in categories:
-                            categories[current_cat] = []
+                    
+                    if line.startswith("##"):
+                        sub_name = line.lstrip("#").strip()
+                        if not current_cat:
+                            current_cat = {"name": "未分類大項", "words": [], "subcategories": []}
+                            hierarchy.append(current_cat)
+                        current_sub = {"name": sub_name, "words": []}
+                        current_cat["subcategories"].append(current_sub)
+                    else:
+                        cat_name = line.lstrip("#").strip()
+                        current_cat = {"name": cat_name, "words": [], "subcategories": []}
+                        hierarchy.append(current_cat)
+                        current_sub = None
                     continue
                 
                 lower_w = line.lower()
                 if lower_w not in seen_all:
                     seen_all.add(lower_w)
-                    if current_cat not in categories:
-                        categories[current_cat] = []
-                    categories[current_cat].append(line)
+                    if current_sub is not None:
+                        current_sub["words"].append(line)
+                    elif current_cat is not None:
+                        current_cat["words"].append(line)
+                    else:
+                        current_cat = {"name": "未分類專用詞", "words": [line], "subcategories": []}
+                        hierarchy.append(current_cat)
     except Exception as e:
-        print(f"[Dictionary] Error loading categorized words: {e}")
+        print(f"[Dictionary] Error loading hierarchy: {e}")
         
-    return categories
+    return hierarchy
 
-def save_categorized_words(cat_dict: dict[str, list[str]]) -> bool:
-    """
-    將結構化的分類字典寫回 dictionary.txt
-    """
+def save_hierarchy(hierarchy: list[dict]) -> bool:
+    """將階層結構格式化寫入 dictionary.txt"""
     ensure_dictionary_file()
     try:
         with open(DICTIONARY_FILE, "w", encoding="utf-8") as f:
             f.write("# 在此輸入您的專屬詞彙，每行一個。\n")
             f.write("# AI 會優先參考這些詞彙來修正語音辨識。\n\n")
-            for cat, words in cat_dict.items():
-                if not cat:
+            for cat in hierarchy:
+                cat_name = cat.get("name", "").strip()
+                if not cat_name:
                     continue
-                f.write(f"# {cat}\n")
-                for w in words:
+                f.write(f"# {cat_name}\n")
+                for w in cat.get("words", []):
                     w = w.strip()
                     if w and not w.startswith("#"):
                         f.write(f"{w}\n")
-                f.write("\n")
+                if cat.get("words"):
+                    f.write("\n")
+                for sub in cat.get("subcategories", []):
+                    sub_name = sub.get("name", "").strip()
+                    if not sub_name:
+                        continue
+                    f.write(f"## {sub_name}\n")
+                    for w in sub.get("words", []):
+                        w = w.strip()
+                        if w and not w.startswith("#"):
+                            f.write(f"{w}\n")
+                    f.write("\n")
         return True
     except Exception as e:
-        print(f"[Dictionary] Error saving categorized words: {e}")
+        print(f"[Dictionary] Error saving hierarchy: {e}")
         return False
 
 def load_words() -> list[str]:
-    """保持向後相容：回傳所有分類扁平化的唯一詞彙清單"""
-    cats = load_categorized_words()
+    """保持向後相容：回傳所有分類扁平化的唯一詞彙清單（提供 Whisper 與 LLM）"""
+    h = load_hierarchy()
     words = []
     seen = set()
-    for cat_words in cats.values():
-        for w in cat_words:
+    for cat in h:
+        for w in cat.get("words", []):
             if w.lower() not in seen:
                 seen.add(w.lower())
                 words.append(w)
+        for sub in cat.get("subcategories", []):
+            for w in sub.get("words", []):
+                if w.lower() not in seen:
+                    seen.add(w.lower())
+                    words.append(w)
     return words
 
+def load_categorized_words() -> dict[str, list[str]]:
+    """向後相容：回傳扁平路徑對應詞彙列表"""
+    h = load_hierarchy()
+    flat = {}
+    for cat in h:
+        c_name = cat["name"]
+        subs = cat.get("subcategories", [])
+        if subs:
+            for s in subs:
+                flat[f"{c_name} / {s['name']}"] = list(s.get("words", []))
+            if cat.get("words"):
+                flat[c_name] = list(cat.get("words", []))
+        else:
+            flat[c_name] = list(cat.get("words", []))
+    return flat
+
 def get_categories() -> list[str]:
-    """取得現有分類名稱清單"""
-    cats = load_categorized_words()
-    return list(cats.keys())
+    """取得現有新增可用的分類路徑清單"""
+    h = load_hierarchy()
+    opts = []
+    for cat in h:
+        c_name = cat["name"]
+        subs = cat.get("subcategories", [])
+        if subs:
+            for s in subs:
+                opts.append(f"{c_name} / {s['name']}")
+        else:
+            opts.append(c_name)
+    return opts
 
 def add_word(word: str, category: str = None) -> bool:
-    """新增單一詞彙至指定分類，若未指定則預設加入地理名詞或最後分類"""
+    """新增單一詞彙至指定分類（支援 '地理 / 氣候水文與大氣' 或 '數學與學術名詞'）"""
     word = word.strip()
     if not word or word.startswith("#"):
         return False
         
-    cats = load_categorized_words()
-    for words in cats.values():
-        if any(w.lower() == word.lower() for w in words):
-            return False
-            
-    if category and category in cats:
-        cats[category].append(word)
-    elif cats:
-        target_cat = category if category else "地理、數學與學術名詞"
-        if target_cat not in cats:
-            target_cat = list(cats.keys())[-1]
-        cats.setdefault(target_cat, []).append(word)
-    else:
-        cats["其他常用專有名詞"] = [word]
+    all_words = [w.lower() for w in load_words()]
+    if word.lower() in all_words:
+        return False
         
-    return save_categorized_words(cats)
+    h = load_hierarchy()
+    added = False
+    
+    if category and " / " in category:
+        parent_name, sub_name = category.split(" / ", 1)
+        for cat in h:
+            if cat["name"] == parent_name:
+                for sub in cat.get("subcategories", []):
+                    if sub["name"] == sub_name:
+                        sub["words"].append(word)
+                        added = True
+                        break
+                if not added:
+                    cat.setdefault("subcategories", []).append({"name": sub_name, "words": [word]})
+                    added = True
+                break
+    elif category:
+        for cat in h:
+            if cat["name"] == category:
+                cat["words"].append(word)
+                added = True
+                break
+                
+    if not added:
+        if h:
+            if h[-1].get("subcategories"):
+                h[-1]["subcategories"][-1]["words"].append(word)
+            else:
+                h[-1]["words"].append(word)
+        else:
+            h.append({"name": "常用專有名詞", "words": [word], "subcategories": []})
+            
+    return save_hierarchy(h)
 
 def delete_word(word_to_delete: str) -> bool:
-    """從 dictionary.txt 中刪除指定詞彙，保持分類結構完整"""
+    """從階層中刪除指定詞彙"""
     word_to_delete = word_to_delete.strip().lower()
-    cats = load_categorized_words()
+    h = load_hierarchy()
     deleted = False
-    for cat_name, words in cats.items():
-        new_words = []
-        for w in words:
-            if w.lower() == word_to_delete:
+    for cat in h:
+        new_words = [w for w in cat.get("words", []) if w.lower() != word_to_delete]
+        if len(new_words) != len(cat.get("words", [])):
+            deleted = True
+            cat["words"] = new_words
+        for sub in cat.get("subcategories", []):
+            new_sub_words = [w for w in sub.get("words", []) if w.lower() != word_to_delete]
+            if len(new_sub_words) != len(sub.get("words", [])):
                 deleted = True
-            else:
-                new_words.append(w)
-        cats[cat_name] = new_words
-        
+                sub["words"] = new_sub_words
+                
     if deleted:
-        return save_categorized_words(cats)
+        return save_hierarchy(h)
+    return False
+
+def move_category(cat_identifier: str, direction: str) -> bool:
+    """
+    上下移動分類排序：
+    cat_identifier: 可能是大類名稱 "地理"，或是子類路徑 "地理 / 氣候水文與大氣"
+    direction: "up" 或 "down"
+    """
+    h = load_hierarchy()
+    if " / " in cat_identifier:
+        parent_name, sub_name = cat_identifier.split(" / ", 1)
+        for cat in h:
+            if cat["name"] == parent_name:
+                subs = cat.get("subcategories", [])
+                for i, s in enumerate(subs):
+                    if s["name"] == sub_name:
+                        if direction == "up" and i > 0:
+                            subs[i], subs[i-1] = subs[i-1], subs[i]
+                            return save_hierarchy(h)
+                        elif direction == "down" and i < len(subs) - 1:
+                            subs[i], subs[i+1] = subs[i+1], subs[i]
+                            return save_hierarchy(h)
+                        return False
+    else:
+        for i, cat in enumerate(h):
+            if cat["name"] == cat_identifier:
+                if direction == "up" and i > 0:
+                    h[i], h[i-1] = h[i-1], h[i]
+                    return save_hierarchy(h)
+                elif direction == "down" and i < len(h) - 1:
+                    h[i], h[i+1] = h[i+1], h[i]
+                    return save_hierarchy(h)
+                return False
     return False
 
 def read_file_with_auto_encoding(filepath: str) -> list[str]:
-    """
-    以自適應編碼讀取外部文字檔案，依序嘗試：
-    1. utf-8-sig (完美處理含 BOM 或無 BOM 之 UTF-8)
-    2. utf-8
-    3. cp950 (臺灣繁體 Big5)
-    4. gb18030
-    """
+    """以自適應編碼讀取外部文字檔案"""
     encodings = ['utf-8-sig', 'utf-8', 'cp950', 'gb18030']
     for enc in encodings:
         try:
             with open(filepath, "r", encoding=enc) as f:
                 lines = [line.strip() for line in f]
-            # 成功讀取且解析出內容
             return lines
         except (UnicodeDecodeError, LookupError):
             continue
-            
-    # 若都失敗，以忽略錯誤方式讀取
     with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
         return [line.strip() for line in f]
 
 def import_dictionary(filepath: str, mode: str = "merge") -> tuple[int, int]:
-    """
-    從指定檔案匯入詞彙
-    :param filepath: 外部文字檔案路徑
-    :param mode: 'merge' (合併增補去重複) 或 'overwrite' (完全覆蓋)
-    :return: (新增詞數, 目前字典總詞數)
-    """
+    """從指定檔案匯入詞彙"""
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"找不到匯入檔案: {filepath}")
         
@@ -198,7 +309,6 @@ def import_dictionary(filepath: str, mode: str = "merge") -> tuple[int, int]:
             new_words.append(line)
             
     if mode == "overwrite":
-        # 完全覆蓋模式：重建 dictionary.txt
         with open(DICTIONARY_FILE, "w", encoding="utf-8") as f:
             f.write(HEADER_TEMPLATE)
             f.write(f"# 由外部匯入覆蓋 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n")
@@ -206,27 +316,19 @@ def import_dictionary(filepath: str, mode: str = "merge") -> tuple[int, int]:
                 f.write(f"{w}\n")
         return len(new_words), len(new_words)
     else:
-        # 合併增補模式 (預設)
         existing_words = load_words()
         existing_set = {w.lower() for w in existing_words}
-        
         words_to_add = [w for w in new_words if w.lower() not in existing_set]
-        
         if words_to_add:
             with open(DICTIONARY_FILE, "a", encoding="utf-8") as f:
                 f.write(f"\n# 由外部檔案匯入增補 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n")
                 for w in words_to_add:
                     f.write(f"{w}\n")
-                    
         total_words = len(load_words())
         return len(words_to_add), total_words
 
 def export_dictionary(target_path: str) -> int:
-    """
-    將目前的 dictionary.txt 匯出為標準 UTF-8 文字檔
-    :param target_path: 目標儲存路徑
-    :return: 匯出的詞彙總數
-    """
+    """將目前的 dictionary.txt 匯出為標準 UTF-8 文字檔"""
     words = load_words()
     target_dir = os.path.dirname(os.path.abspath(target_path))
     if target_dir and not os.path.exists(target_dir):

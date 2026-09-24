@@ -1,14 +1,16 @@
 """
 NoType 歷史紀錄管理器
-- 在記憶體中保存最近 100 筆語音辨識紀錄
-- 程式重啟後自動清空（不落地持久化）
+- 本地 JSON 持久化儲存 (最多保存最近 1000 筆)
+- 程式重啟或系統關機後自動載入，紀錄永不丟失
 """
 import os
+import json
 import time as _time
 from datetime import datetime
 
 MAX_RECORDS = 1000
 AUDIO_DIR = r"S:\NoType_Audio"
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
 
 def ensure_audio_dir():
     r"""確保 S:\NoType_Audio 目錄存在並自動設定為隱藏資料夾 (+h)"""
@@ -45,20 +47,64 @@ class HistoryRecord:
         self.audio_path = audio_path
         self.error_msg = error_msg
 
-# --- 全域紀錄池 (In-Memory) ---
-_records: list = []
+def _load_history_from_disk() -> list:
+    """從 history.json 載入持久化歷史紀錄"""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            records = []
+            for item in data:
+                rec = HistoryRecord(
+                    duration_sec=item.get("duration_sec", 0.0),
+                    status=item.get("status", "success"),
+                    raw_text=item.get("raw_text", ""),
+                    refined_text=item.get("refined_text", ""),
+                    audio_path=item.get("audio_path", ""),
+                    error_msg=item.get("error_msg", "")
+                )
+                rec.timestamp = item.get("timestamp", rec.timestamp)
+                records.append(rec)
+            return records[:MAX_RECORDS]
+    except Exception as e:
+        print(f"[History] Error loading history from disk: {e}")
+        return []
+
+def _save_history_to_disk(records: list):
+    """將歷史紀錄儲存至 history.json"""
+    try:
+        data = []
+        for r in records[:MAX_RECORDS]:
+            data.append({
+                "timestamp": r.timestamp,
+                "duration_sec": r.duration_sec,
+                "status": r.status,
+                "raw_text": r.raw_text,
+                "refined_text": r.refined_text,
+                "audio_path": r.audio_path,
+                "error_msg": r.error_msg
+            })
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[History] Error saving history to disk: {e}")
+
+# --- 全域紀錄池 (啟動時自動從磁碟載入) ---
+_records: list = _load_history_from_disk()
 
 def add_record(record: HistoryRecord):
-    """新增一筆紀錄到最前面，超過上限時自動刪除最舊的"""
+    """新增一筆紀錄到最前面，並即時持久化儲存到磁碟"""
     _records.insert(0, record)
     while len(_records) > MAX_RECORDS:
         old = _records.pop()
-        # 刪除最舊紀錄對應的音檔
+        # 刪除超過上限之紀錄對應的音檔
         if old.audio_path and os.path.exists(old.audio_path):
             try:
                 os.remove(old.audio_path)
             except Exception:
                 pass
+    _save_history_to_disk(_records)
 
 def get_all() -> list:
     """取得全部紀錄（新 → 舊）"""
