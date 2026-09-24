@@ -29,69 +29,127 @@ def ensure_dictionary_file():
         except Exception as e:
             print(f"[Dictionary] Error creating dictionary.txt: {e}")
 
-def load_words() -> list[str]:
+def load_categorized_words() -> dict[str, list[str]]:
     """
-    載入字典中所有的自訂詞彙 (排除註解行與空行)
-    保持原始排列順序並自動去除重複
+    載入字典中依分類整理的詞彙字典：
+    {
+        "系統與工作流指令": ["開工", "收工", ...],
+        "軟硬體、工具與擴充": ["S磁碟", ...],
+        ...
+    }
     """
     ensure_dictionary_file()
-    words = []
-    seen = set()
+    categories = {}
+    current_cat = "未分類專用詞"
+    seen_all = set()
+    
     try:
         with open(DICTIONARY_FILE, "r", encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
-                if not line or line.startswith("#"):
+                if not line:
                     continue
-                lower_key = line.lower()
-                if lower_key not in seen:
-                    seen.add(lower_key)
-                    words.append(line)
+                if line.startswith("#"):
+                    # 排除全域引導註解
+                    if line.startswith("# 在此") or line.startswith("# AI") or line.startswith("# NoType") or line.startswith("# 總詞數") or line.startswith("# 由外部"):
+                        continue
+                    cat_name = line.lstrip("#").strip()
+                    if cat_name:
+                        current_cat = cat_name
+                        if current_cat not in categories:
+                            categories[current_cat] = []
+                    continue
+                
+                lower_w = line.lower()
+                if lower_w not in seen_all:
+                    seen_all.add(lower_w)
+                    if current_cat not in categories:
+                        categories[current_cat] = []
+                    categories[current_cat].append(line)
     except Exception as e:
-        print(f"[Dictionary] Error loading words: {e}")
+        print(f"[Dictionary] Error loading categorized words: {e}")
+        
+    return categories
+
+def save_categorized_words(cat_dict: dict[str, list[str]]) -> bool:
+    """
+    將結構化的分類字典寫回 dictionary.txt
+    """
+    ensure_dictionary_file()
+    try:
+        with open(DICTIONARY_FILE, "w", encoding="utf-8") as f:
+            f.write("# 在此輸入您的專屬詞彙，每行一個。\n")
+            f.write("# AI 會優先參考這些詞彙來修正語音辨識。\n\n")
+            for cat, words in cat_dict.items():
+                if not cat:
+                    continue
+                f.write(f"# {cat}\n")
+                for w in words:
+                    w = w.strip()
+                    if w and not w.startswith("#"):
+                        f.write(f"{w}\n")
+                f.write("\n")
+        return True
+    except Exception as e:
+        print(f"[Dictionary] Error saving categorized words: {e}")
+        return False
+
+def load_words() -> list[str]:
+    """保持向後相容：回傳所有分類扁平化的唯一詞彙清單"""
+    cats = load_categorized_words()
+    words = []
+    seen = set()
+    for cat_words in cats.values():
+        for w in cat_words:
+            if w.lower() not in seen:
+                seen.add(w.lower())
+                words.append(w)
     return words
 
-def add_word(word: str) -> bool:
-    """新增單一詞彙至 dictionary.txt，若已存在則不重複新增"""
+def get_categories() -> list[str]:
+    """取得現有分類名稱清單"""
+    cats = load_categorized_words()
+    return list(cats.keys())
+
+def add_word(word: str, category: str = None) -> bool:
+    """新增單一詞彙至指定分類，若未指定則預設加入地理名詞或最後分類"""
     word = word.strip()
     if not word or word.startswith("#"):
         return False
         
-    current_words = load_words()
-    if any(w.lower() == word.lower() for w in current_words):
-        return False
+    cats = load_categorized_words()
+    for words in cats.values():
+        if any(w.lower() == word.lower() for w in words):
+            return False
+            
+    if category and category in cats:
+        cats[category].append(word)
+    elif cats:
+        target_cat = category if category else "地理、數學與學術名詞"
+        if target_cat not in cats:
+            target_cat = list(cats.keys())[-1]
+        cats.setdefault(target_cat, []).append(word)
+    else:
+        cats["其他常用專有名詞"] = [word]
         
-    try:
-        with open(DICTIONARY_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n{word}\n")
-        return True
-    except Exception as e:
-        print(f"[Dictionary] Error adding word: {e}")
-        return False
+    return save_categorized_words(cats)
 
 def delete_word(word_to_delete: str) -> bool:
-    """從 dictionary.txt 中刪除指定詞彙"""
+    """從 dictionary.txt 中刪除指定詞彙，保持分類結構完整"""
     word_to_delete = word_to_delete.strip().lower()
-    ensure_dictionary_file()
-    try:
-        with open(DICTIONARY_FILE, "r", encoding="utf-8-sig") as f:
-            lines = f.readlines()
-            
-        new_lines = []
-        deleted = False
-        for line in lines:
-            stripped = line.strip()
-            if not stripped.startswith("#") and stripped.lower() == word_to_delete:
+    cats = load_categorized_words()
+    deleted = False
+    for cat_name, words in cats.items():
+        new_words = []
+        for w in words:
+            if w.lower() == word_to_delete:
                 deleted = True
-                continue
-            new_lines.append(line)
-            
-        if deleted:
-            with open(DICTIONARY_FILE, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-            return True
-    except Exception as e:
-        print(f"[Dictionary] Error deleting word: {e}")
+            else:
+                new_words.append(w)
+        cats[cat_name] = new_words
+        
+    if deleted:
+        return save_categorized_words(cats)
     return False
 
 def read_file_with_auto_encoding(filepath: str) -> list[str]:

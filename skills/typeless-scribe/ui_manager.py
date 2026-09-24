@@ -787,7 +787,7 @@ class UIManager:
         )
         self._dict_count_lbl.pack(anchor="w", pady=(2, 0))
         
-        # --- Search Bar ---
+        # --- Search Bar & Quick Toggles ---
         search_box = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=4)
         search_box.pack(fill="x")
         
@@ -802,30 +802,104 @@ class UIManager:
             font=("Microsoft JhengHei", 10),
             bg=self.BG_CARD, fg=self.FG_TEXT, insertbackground="white", bd=1
         )
-        search_entry.pack(side="left", fill="x", expand=True, padx=6)
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 8))
         
-        # --- Listbox Frame ---
-        list_frame = tk.Frame(self.dictionary_win, bg=self.BG_CARD, padx=2, pady=2)
-        list_frame.pack(fill="both", expand=True, padx=16, pady=6)
+        def expand_all():
+            if hasattr(self, '_dict_tree'):
+                for c in self._dict_tree.get_children():
+                    self._dict_tree.item(c, open=True)
+                    
+        def collapse_all():
+            if hasattr(self, '_dict_tree'):
+                for c in self._dict_tree.get_children():
+                    self._dict_tree.item(c, open=False)
+                    
+        tk.Button(
+            search_box, text=" ➕ 展開全部 ", command=expand_all,
+            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+        ).pack(side="left", padx=2)
+        tk.Button(
+            search_box, text=" ➖ 全部收起 ", command=collapse_all,
+            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+        ).pack(side="left", padx=2)
         
-        scrollbar = tk.Scrollbar(list_frame)
+        # --- Treeview Frame ---
+        tree_frame = tk.Frame(self.dictionary_win, bg=self.BG_CARD, padx=2, pady=2)
+        tree_frame.pack(fill="both", expand=True, padx=16, pady=6)
+        
+        scrollbar = tk.Scrollbar(tree_frame)
         scrollbar.pack(side="right", fill="y")
         
-        self._dict_listbox = tk.Listbox(
-            list_frame,
+        from tkinter import ttk
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(
+            "Dict.Treeview",
+            background=self.BG_CARD,
+            foreground=self.FG_TEXT,
+            fieldbackground=self.BG_CARD,
             font=("Microsoft JhengHei", 10),
-            bg=self.BG_CARD, fg=self.FG_TEXT,
-            selectbackground="#2980b9", selectforeground="white",
-            exportselection=False,
-            activestyle="none", bd=0, highlightthickness=0,
+            rowheight=26,
+            borderwidth=0
+        )
+        style.map(
+            "Dict.Treeview",
+            background=[("selected", "#2980b9")],
+            foreground=[("selected", "white")]
+        )
+        
+        self._dict_tree = ttk.Treeview(
+            tree_frame,
+            show="tree",
+            selectmode="browse",
+            style="Dict.Treeview",
             yscrollcommand=scrollbar.set
         )
-        self._dict_listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=self._dict_listbox.yview)
+        self._dict_tree.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self._dict_tree.yview)
+        
+        self._dict_tree.tag_configure("category", font=("Microsoft JhengHei", 10, "bold"), foreground="#f1c40f")
+        self._dict_tree.tag_configure("word", font=("Microsoft JhengHei", 9), foreground="#ecf0f1")
+        
+        # 單擊展開/收起樹狀目錄 (點一下展開，再點一下收起)
+        def on_tree_click(event):
+            item_id = self._dict_tree.identify_row(event.y)
+            if not item_id:
+                return
+            # 若為分類節點 (父層為空)
+            if not self._dict_tree.parent(item_id):
+                element = self._dict_tree.identify_element(event.x, event.y)
+                # 排除原生小箭頭 (原生小箭頭已被 Tkinter 自動切換)
+                if element != "Treeitem.indicator":
+                    is_open = self._dict_tree.item(item_id, "open")
+                    self._dict_tree.item(item_id, open=not is_open)
+                # 自動將底部新增分類選單切換至該分類
+                cat_name = item_id.replace("cat_", "")
+                if hasattr(self, '_dict_cat_var') and self._dict_cat_var:
+                    self._dict_cat_var.set(cat_name)
+            else:
+                # 若點選為子項目詞彙，連動所屬分類
+                vals = self._dict_tree.item(item_id, "values")
+                if vals and len(vals) >= 2 and hasattr(self, '_dict_cat_var'):
+                    self._dict_cat_var.set(vals[1])
+                    
+        self._dict_tree.bind("<ButtonRelease-1>", on_tree_click)
         
         # --- Quick Add / Delete Single Word Frame ---
         add_box = tk.Frame(self.dictionary_win, bg=self.BG_DARK, padx=16, pady=6)
         add_box.pack(fill="x")
+        
+        tk.Label(
+            add_box, text="分類：", font=("Microsoft JhengHei", 9),
+            fg=self.FG_DIM, bg=self.BG_DARK
+        ).pack(side="left")
+        
+        self._dict_cat_var = tk.StringVar(value="地理、數學與學術名詞")
+        self._dict_cat_menu = ttk.Combobox(
+            add_box, textvariable=self._dict_cat_var,
+            state="readonly", width=18, font=("Microsoft JhengHei", 9)
+        )
+        self._dict_cat_menu.pack(side="left", padx=(0, 8))
         
         self._dict_add_var = tk.StringVar()
         add_entry = tk.Entry(
@@ -837,11 +911,19 @@ class UIManager:
         
         def do_add_word(event=None):
             val = self._dict_add_var.get().strip()
+            cat = self._dict_cat_var.get().strip() if hasattr(self, '_dict_cat_var') else "地理、數學與學術名詞"
             if val:
-                if dictionary_manager.add_word(val):
-                    self.toast(f"✅ 已新增詞彙「{val}」！", is_error=False, duration=2000)
+                if dictionary_manager.add_word(val, category=cat):
+                    self.toast(f"✅ 已新增「{val}」至【{cat}】！", is_error=False, duration=2000)
                     self._dict_add_var.set("")
                     self._refresh_dictionary_list()
+                    cat_id = f"cat_{cat}"
+                    if self._dict_tree.exists(cat_id):
+                        self._dict_tree.item(cat_id, open=True)
+                        word_id = f"word_{cat}_{val}"
+                        if self._dict_tree.exists(word_id):
+                            self._dict_tree.selection_set(word_id)
+                            self._dict_tree.see(word_id)
                 else:
                     self.toast(f"⚠️ 詞彙「{val}」已存在或無效", is_error=True, duration=2500)
                     
@@ -854,11 +936,16 @@ class UIManager:
         ).pack(side="left")
         
         def do_delete_word():
-            sel = self._dict_listbox.curselection()
+            sel = self._dict_tree.selection()
             if not sel:
-                self.toast("⚠️ 請先在清單中點選要刪除的詞彙", is_error=True, duration=2500)
+                self.toast("⚠️ 請先在樹狀清單中點選要刪除的詞彙", is_error=True, duration=2500)
                 return
-            word = self._dict_listbox.get(sel[0])
+            item_id = sel[0]
+            vals = self._dict_tree.item(item_id, "values")
+            if not vals:
+                self.toast("⚠️ 請點選具體詞彙進行刪除，不可整類刪除", is_error=True, duration=2500)
+                return
+            word = vals[0]
             if dictionary_manager.delete_word(word):
                 self.toast(f"🗑️ 已刪除詞彙「{word}」", is_error=False, duration=2000)
                 self._refresh_dictionary_list()
@@ -904,22 +991,49 @@ class UIManager:
 
     def _refresh_dictionary_list(self):
         import dictionary_manager
-        if not hasattr(self, '_dict_listbox') or not self._dict_listbox:
+        if not hasattr(self, '_dict_tree') or not self._dict_tree:
             return
-        self._all_dict_words = dictionary_manager.load_words()
+        self._all_categorized_words = dictionary_manager.load_categorized_words()
+        total_words = sum(len(w) for w in self._all_categorized_words.values())
+        total_cats = len(self._all_categorized_words)
         if hasattr(self, '_dict_count_lbl') and self._dict_count_lbl:
-            self._dict_count_lbl.config(text=f"目前收錄 {len(self._all_dict_words)} 筆專用詞彙（AI 優先參考修正）")
+            self._dict_count_lbl.config(text=f"目前收錄 {total_words} 筆專用詞彙（共 {total_cats} 大分類，AI 優先參考修正）")
+            
+        if hasattr(self, '_dict_cat_menu') and self._dict_cat_menu:
+            cat_list = list(self._all_categorized_words.keys())
+            self._dict_cat_menu['values'] = cat_list
+            if (not self._dict_cat_var.get() or self._dict_cat_var.get() not in cat_list) and cat_list:
+                self._dict_cat_var.set("地理、數學與學術名詞" if "地理、數學與學術名詞" in cat_list else cat_list[0])
+                
         self._filter_dictionary_list()
 
     def _filter_dictionary_list(self):
-        if not hasattr(self, '_dict_listbox') or not self._dict_listbox:
+        if not hasattr(self, '_dict_tree') or not self._dict_tree:
             return
+            
+        # 記錄現有分類的展開狀態
+        expanded_cats = set()
+        for c in self._dict_tree.get_children():
+            if self._dict_tree.item(c, "open"):
+                expanded_cats.add(c)
+                
         query = self._dict_search_var.get().strip().lower() if hasattr(self, '_dict_search_var') else ""
-        self._dict_listbox.delete(0, tk.END)
-        all_words = getattr(self, '_all_dict_words', [])
-        for w in all_words:
-            if not query or query in w.lower():
-                self._dict_listbox.insert(tk.END, w)
+        self._dict_tree.delete(*self._dict_tree.get_children())
+        all_cats = getattr(self, '_all_categorized_words', {})
+        
+        for cat_name, words in all_cats.items():
+            matching_words = [w for w in words if not query or query in w.lower()]
+            if query and not matching_words:
+                continue
+                
+            cat_id = f"cat_{cat_name}"
+            # 搜尋模式時自動展開匹配分類，一般模式預設收起 (若先前已展開則保持)
+            should_open = bool(query) or (cat_id in expanded_cats)
+            cat_text = f"📁 {cat_name} ({len(matching_words)})"
+            self._dict_tree.insert("", "end", iid=cat_id, text=cat_text, open=should_open, tags=("category",))
+            
+            for w in matching_words:
+                self._dict_tree.insert(cat_id, "end", iid=f"word_{cat_name}_{w}", text=f"  {w}", tags=("word",), values=(w, cat_name))
 
     def _prompt_import_dictionary(self):
         from tkinter import filedialog
