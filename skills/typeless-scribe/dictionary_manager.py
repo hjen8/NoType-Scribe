@@ -277,6 +277,171 @@ def move_category(cat_identifier: str, direction: str) -> bool:
                 return False
     return False
 
+def edit_word(old_word: str, new_word: str, new_category: str = None) -> bool:
+    """
+    修改指定詞彙之內容或變更所屬分類
+    """
+    old_word = old_word.strip()
+    new_word = new_word.strip()
+    if not old_word or not new_word or new_word.startswith("#"):
+        return False
+        
+    h = load_hierarchy()
+    
+    # 尋找舊詞所在位置
+    old_cat_parent = None
+    old_sub = None
+    old_list = None
+    old_idx = -1
+    
+    for cat in h:
+        for idx, w in enumerate(cat.get("words", [])):
+            if w.lower() == old_word.lower():
+                old_cat_parent = cat
+                old_list = cat["words"]
+                old_idx = idx
+                break
+        if old_list is not None:
+            break
+        for sub in cat.get("subcategories", []):
+            for idx, w in enumerate(sub.get("words", [])):
+                if w.lower() == old_word.lower():
+                    old_cat_parent = cat
+                    old_sub = sub
+                    old_list = sub["words"]
+                    old_idx = idx
+                    break
+            if old_list is not None:
+                break
+        if old_list is not None:
+            break
+            
+    if old_list is None:
+        return False
+        
+    curr_cat_path = f"{old_cat_parent['name']} / {old_sub['name']}" if old_sub else old_cat_parent['name']
+    
+    # 若未換分類，原地修改文字保持順序
+    if not new_category or new_category == curr_cat_path:
+        old_list[old_idx] = new_word
+        return save_hierarchy(h)
+    else:
+        # 分類搬遷：從原分類移除，放入新分類
+        old_list.pop(old_idx)
+        target_list = None
+        if " / " in new_category:
+            target_p, target_s = new_category.split(" / ", 1)
+            for cat in h:
+                if cat["name"] == target_p:
+                    for sub in cat.get("subcategories", []):
+                        if sub["name"] == target_s:
+                            target_list = sub["words"]
+                            break
+                    if target_list is None:
+                        cat.setdefault("subcategories", []).append({"name": target_s, "words": []})
+                        target_list = cat["subcategories"][-1]["words"]
+                    break
+        else:
+            for cat in h:
+                if cat["name"] == new_category:
+                    target_list = cat["words"]
+                    break
+            if target_list is None:
+                h.append({"name": new_category, "words": [], "subcategories": []})
+                target_list = h[-1]["words"]
+                
+        target_list.append(new_word)
+        return save_hierarchy(h)
+
+def move_word(word: str, category_path: str, direction: str) -> bool:
+    """
+    在指定分類內部上下移動詞彙順序：
+    direction: "up" 或 "down"
+    """
+    word = word.strip().lower()
+    h = load_hierarchy()
+    target_words = None
+    
+    if " / " in category_path:
+        parent_name, sub_name = category_path.split(" / ", 1)
+        for cat in h:
+            if cat["name"] == parent_name:
+                for sub in cat.get("subcategories", []):
+                    if sub["name"] == sub_name:
+                        target_words = sub.get("words", [])
+                        break
+                break
+    else:
+        for cat in h:
+            if cat["name"] == category_path:
+                target_words = cat.get("words", [])
+                break
+                
+    if not target_words:
+        return False
+        
+    for i, w in enumerate(target_words):
+        if w.lower() == word:
+            if direction == "up" and i > 0:
+                target_words[i], target_words[i-1] = target_words[i-1], target_words[i]
+                return save_hierarchy(h)
+            elif direction == "down" and i < len(target_words) - 1:
+                target_words[i], target_words[i+1] = target_words[i+1], target_words[i]
+                return save_hierarchy(h)
+            return False
+    return False
+
+def predict_category(word: str) -> str:
+    """
+    依據詞彙特徵進行語意分類預測，回傳最相符的分類路徑
+    """
+    if not word:
+        return "生活、金融與其他常用專有名詞"
+    w = word.strip()
+    
+    # 1. 地理特徵
+    climate_kw = ['流', '潮', '風', '雨', '雲', '雪', '冰', '氣候', '大氣', '聖嬰', '水', '海', '河', '波', '集中度', '逆溫', '環流', '西風', '熱帶', '溫帶']
+    if any(k in w for k in climate_kw):
+        return "地理 / 氣候水文與大氣"
+    terrain_kw = ['地形', '地質', '山', '谷', '丘', '崖', '階', '原', '島', '峰', '嶺', '洞', '穴', '斷層', '背斜', '向斜', '地塹', '地壘', '喀斯特', '曲流', '鐘乳石', '沙洲', '石柱']
+    if any(k in w for k in terrain_kw):
+        return "地理 / 地形與地質"
+    gis_kw = ['投影', 'gis', 'dtm', 'dem', '分析', '經濟', '農業', '工業', '人口', '中地', '商閾', '等高線', '金字塔', '區位']
+    if any(k in w.lower() for k in gis_kw):
+        return "地理 / 地圖GIS與人文經濟"
+        
+    # 2. 學校班級教學
+    school_kw = ['班', '校', '課', '卷', '考', '題', '學', '國中', '高中', '小學', '老師', '同學', '學習', '講義', '模考', '學測', '會考', '段考', '景女', 'cmgsh']
+    if any(k in w.lower() for k in school_kw):
+        return "學校、班級與教學"
+        
+    # 3. 軟硬體工具與擴充
+    tech_kw = ['py', 'api', 'key', 'exe', 'app', '軟體', '硬體', '程式', '腳本', '槽', '碟', '檔', '庫', 'ui', 'tool', 'sop', 'skill', 'notype', 'git', 'windows', 'token']
+    if any(k in w.lower() for k in tech_kw):
+        return "軟硬體、工具與擴充"
+        
+    # 4. 系統指令
+    cmd_kw = ['開工', '收工', '指令', '模式', '重啟', '關閉', '清空']
+    if any(k in w for k in cmd_kw):
+        return "系統與工作流指令"
+        
+    # 5. 家人與親友
+    family_kw = ['媽', '爸', '哥', '姐', '弟', '妹', '親', '友', '叔', '伯', '阿姨', '姑', '舅', '金枝', '小溱', '懷斌', '女兒', '兒子', '老婆', '先生']
+    if any(k in w for k in family_kw):
+        return "家人與親友"
+        
+    # 6. 人名 (常見臺灣姓氏開頭且長度 2~4)
+    tw_surnames = ['陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '楊', '許', '鄭', '謝', '洪', '郭', '邱', '曾', '廖', '賴', '徐', '周', '葉', '蘇', '莊', '江', '呂', '何', '羅', '高', '蕭', '潘', '朱', '簡', '鍾', '彭', '游', '詹', '胡', '施', '沈', '方', '柯']
+    if 2 <= len(w) <= 4 and any(w.startswith(s) for s in tw_surnames):
+        return "學生、同事與人名"
+        
+    # 7. 數學
+    math_kw = ['加', '減', '乘', '除', '極值', '根號', '函數', '幾何', '代數', '方程式', '向量', '對稱', '微積分', '矩陣']
+    if any(k in w for k in math_kw):
+        return "數學與學術名詞"
+        
+    return "生活、金融與其他常用專有名詞"
+
 def read_file_with_auto_encoding(filepath: str) -> list[str]:
     """以自適應編碼讀取外部文字檔案"""
     encodings = ['utf-8-sig', 'utf-8', 'cp950', 'gb18030']

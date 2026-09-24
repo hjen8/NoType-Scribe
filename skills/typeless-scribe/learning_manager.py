@@ -50,11 +50,11 @@ def append_to_dictionary(word: str):
     except Exception as e:
         print(f"[Learning] Error appending to dictionary: {e}")
 
-def add_correction(wrong_text: str, correct_text: str):
+def add_correction(wrong_text: str, correct_text: str, category: str = None):
     """
     新增一組糾錯記憶：
     1. 寫入 corrections.json
-    2. 自動沉澱正確字詞至 dictionary.txt
+    2. 自動沉澱正確字詞至 dictionary.txt 中的指定分類
     """
     wrong_text = wrong_text.strip()
     correct_text = correct_text.strip()
@@ -68,8 +68,15 @@ def add_correction(wrong_text: str, correct_text: str):
         save_corrections(corrections)
         print(f"[Learning] Learned correction: '{wrong_text}' -> '{correct_text}'")
         
-    # 自動將正確詞彙記入專屬字典
-    append_to_dictionary(correct_text)
+    # 自動將正確詞彙記入專屬字典並精準歸類
+    try:
+        import dictionary_manager
+        if not category:
+            category = dictionary_manager.predict_category(correct_text)
+        dictionary_manager.add_word(correct_text, category=category)
+    except Exception as e:
+        print(f"[Learning] Error adding to dictionary: {e}")
+        append_to_dictionary(correct_text)
 
 def apply_corrections(text: str) -> str:
     """套用所有已學習的糾錯記憶至文字中"""

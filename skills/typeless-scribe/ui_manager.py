@@ -553,7 +553,7 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 460, 290
+        win_w, win_h = 480, 330
         sw = dialog.winfo_screenwidth()
         sh = dialog.winfo_screenheight()
         dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
@@ -575,21 +575,43 @@ class UIManager:
             
         # 正確的詞
         row2 = tk.Frame(dialog, bg=self.BG_DARK)
-        row2.pack(fill="x", padx=20, pady=4)
+        row2.pack(fill="x", padx=20, pady=3)
         tk.Label(row2, text="正確的詞：", font=("Microsoft JhengHei", 9, "bold"), fg="#f39c12", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
-        entry_correct = tk.Entry(row2, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        correct_var = tk.StringVar()
+        entry_correct = tk.Entry(row2, textvariable=correct_var, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
         entry_correct.pack(side="left", fill="x", expand=True)
         entry_correct.focus_set()
         
+        # 自動歸類分類選單
+        import dictionary_manager
+        cat_options = dictionary_manager.get_categories()
+        default_pred = dictionary_manager.predict_category(wrong_text)
+        cat_var = tk.StringVar(value=default_pred if default_pred in cat_options else (cat_options[0] if cat_options else ""))
+        
+        row_cat = tk.Frame(dialog, bg=self.BG_DARK)
+        row_cat.pack(fill="x", padx=20, pady=3)
+        tk.Label(row_cat, text="自動歸類：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        from tkinter import ttk
+        cat_combo = ttk.Combobox(row_cat, textvariable=cat_var, values=cat_options, state="readonly", font=("Microsoft JhengHei", 9))
+        cat_combo.pack(side="left", fill="x", expand=True)
+        
+        def on_correct_change(*args):
+            txt = correct_var.get().strip()
+            if txt:
+                pred = dictionary_manager.predict_category(txt)
+                if pred in cat_options:
+                    cat_var.set(pred)
+        correct_var.trace_add("write", on_correct_change)
+        
         # 提示標籤
-        hint_text = "💡「僅本次替換」只修改當前選取文字；「永久學習」會一併存入字典供日後自動校正"
+        hint_text = "💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正"
         lbl_hint = tk.Label(
             dialog, 
             text=hint_text, 
             font=("Microsoft JhengHei", 8),
             fg="#95a5a6", bg=self.BG_DARK
         )
-        lbl_hint.pack(anchor="w", padx=20, pady=(6, 15))
+        lbl_hint.pack(anchor="w", padx=20, pady=(6, 12))
         
         # 動作 1：僅本次替換 (不存入字典)
         def replace_once(event=None):
@@ -604,11 +626,12 @@ class UIManager:
         def replace_and_learn(event=None):
             wrong = entry_wrong.get().strip()
             correct = entry_correct.get().strip()
+            chosen_cat = cat_var.get().strip()
             dialog.destroy()
             if correct:
                 from learning_manager import add_correction
-                add_correction(wrong, correct)
-                self.toast(f"✅ 已替換並永久學習新詞「{correct}」！", is_error=False, duration=2500)
+                add_correction(wrong, correct, category=chosen_cat)
+                self.toast(f"✅ 已替換並存入【{chosen_cat}】：「{correct}」！", is_error=False, duration=2500)
                 if on_saved:
                     on_saved(correct)
             
@@ -806,11 +829,6 @@ class UIManager:
         
         def expand_all():
             if hasattr(self, '_dict_tree'):
-                for c in self._dict_tree.get_children():
-                    self._dict_tree.item(c, open=True)
-                    
-        def expand_all():
-            if hasattr(self, '_dict_tree'):
                 def _open_rec(parent=""):
                     for c in self._dict_tree.get_children(parent):
                         self._dict_tree.item(c, open=True)
@@ -834,40 +852,60 @@ class UIManager:
             font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
         ).pack(side="left", padx=2)
         
-        # 分類上下順序移動
-        def move_selected_category(direction):
+        # 智慧雙模態上下移動（分類 或 詞彙）
+        def move_selected_item(direction):
             sel = self._dict_tree.selection()
             if not sel:
-                self.toast("⚠️ 請先在列表中點選欲調整順序的分類節點", is_error=True, duration=2000)
+                self.toast("⚠️ 請先在列表中點選欲調整順序的分類或詞彙", is_error=True, duration=2000)
                 return
             item_id = sel[0]
             tags = self._dict_tree.item(item_id, "tags")
+            import dictionary_manager
+            action_text = "上移" if direction == "up" else "下移"
+            
             if "category_l1" in tags:
                 cat_ident = item_id.replace("cat_l1_", "")
+                if dictionary_manager.move_category(cat_ident, direction):
+                    self.toast(f"✅ 已{action_text}分類【{cat_ident}】！", is_error=False, duration=1500)
+                    self._refresh_dictionary_list()
+                    if self._dict_tree.exists(item_id):
+                        self._dict_tree.selection_set(item_id)
+                        self._dict_tree.see(item_id)
+                else:
+                    self.toast("⚠️ 已達該層級頂部或底部，無法再移動", is_error=True, duration=1500)
             elif "category_l2" in tags:
                 cat_ident = item_id.replace("cat_l2_", "")
+                if dictionary_manager.move_category(cat_ident, direction):
+                    sub_name = cat_ident.split(" / ")[-1]
+                    self.toast(f"✅ 已{action_text}子分類【{sub_name}】！", is_error=False, duration=1500)
+                    self._refresh_dictionary_list()
+                    if self._dict_tree.exists(item_id):
+                        self._dict_tree.selection_set(item_id)
+                        self._dict_tree.see(item_id)
+                else:
+                    self.toast("⚠️ 已達該層級頂部或底部，無法再移動", is_error=True, duration=1500)
+            elif "word" in tags:
+                vals = self._dict_tree.item(item_id, "values")
+                if vals and len(vals) >= 2:
+                    word = vals[0]
+                    cat_path = vals[1]
+                    if dictionary_manager.move_word(word, cat_path, direction):
+                        self.toast(f"✅ 已{action_text}詞彙「{word}」！", is_error=False, duration=1500)
+                        self._refresh_dictionary_list()
+                        if self._dict_tree.exists(item_id):
+                            self._dict_tree.selection_set(item_id)
+                            self._dict_tree.see(item_id)
+                    else:
+                        self.toast("⚠️ 詞彙已達該分類頂部或底部，無法再移動", is_error=True, duration=1500)
             else:
-                self.toast("⚠️ 只能移動「分類節點」的順序，不能移動單一詞彙", is_error=True, duration=2000)
-                return
-                
-            import dictionary_manager
-            if dictionary_manager.move_category(cat_ident, direction):
-                action_text = "上移" if direction == "up" else "下移"
-                display_name = cat_ident.split(" / ")[-1]
-                self.toast(f"✅ 已{action_text}分類【{display_name}】！", is_error=False, duration=1500)
-                self._refresh_dictionary_list()
-                if self._dict_tree.exists(item_id):
-                    self._dict_tree.selection_set(item_id)
-                    self._dict_tree.see(item_id)
-            else:
-                self.toast("⚠️ 已達該層級頂部或底部，無法再移動", is_error=True, duration=1500)
+                self.toast("⚠️ 請選取分類節點或詞彙項目進行移動", is_error=True, duration=2000)
                 
         tk.Button(
-            search_box, text=" ⬆️ 上移分類 ", command=lambda: move_selected_category("up"),
+            search_box, text=" ⬆️ 上移 ", command=lambda: move_selected_item("up"),
             font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
         ).pack(side="left", padx=(10, 2))
         tk.Button(
-            search_box, text=" ⬇️ 下移分類 ", command=lambda: move_selected_category("down"),
+            search_box, text=" ⬇️ 下移 ", command=lambda: move_selected_item("down"),
             font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
         ).pack(side="left", padx=2)
         
@@ -953,7 +991,7 @@ class UIManager:
             fg=self.FG_DIM, bg=self.BG_DARK
         ).pack(side="left")
         
-        self._dict_cat_var = tk.StringVar(value="地理-氣候水文與大氣")
+        self._dict_cat_var = tk.StringVar(value="地理 / 氣候水文與大氣")
         self._dict_cat_menu = ttk.Combobox(
             add_box, textvariable=self._dict_cat_var,
             state="readonly", width=18, font=("Microsoft JhengHei", 9)
@@ -1005,7 +1043,117 @@ class UIManager:
             add_box, text=" ➕ 新增詞彙 ", command=do_add_word,
             font=("Microsoft JhengHei", 9, "bold"),
             bg="#27ae60", fg="white", bd=0, padx=8, pady=3
-        ).pack(side="left")
+        ).pack(side="left", padx=(0, 4))
+        
+        # 修改選取詞彙對話框
+        def do_edit_word(target_item_id=None):
+            sel = [target_item_id] if target_item_id else self._dict_tree.selection()
+            if not sel:
+                self.toast("⚠️ 請先在列表中點選要修改的詞彙", is_error=True, duration=2000)
+                return
+            item_id = sel[0]
+            vals = self._dict_tree.item(item_id, "values")
+            if not vals:
+                self.toast("⚠️ 只能編輯具體詞彙，不可編輯分類標題", is_error=True, duration=2000)
+                return
+            old_word = vals[0]
+            old_cat = vals[1]
+            
+            edit_win = tk.Toplevel(self.dictionary_win if self.dictionary_win else self.root)
+            edit_win.title("修改專屬詞彙")
+            edit_win.configure(bg=self.BG_DARK)
+            edit_win.attributes("-topmost", True)
+            w, h = 420, 200
+            sw = edit_win.winfo_screenwidth()
+            sh = edit_win.winfo_screenheight()
+            edit_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+            edit_win.resizable(False, False)
+            
+            tk.Label(
+                edit_win, text=f"✏️ 修改詞彙：{old_word}",
+                font=("Microsoft JhengHei", 11, "bold"),
+                fg=self.FG_TEXT, bg=self.BG_DARK
+            ).pack(anchor="w", padx=20, pady=(15, 8))
+            
+            f1 = tk.Frame(edit_win, bg=self.BG_DARK)
+            f1.pack(fill="x", padx=20, pady=4)
+            tk.Label(f1, text="新詞彙名稱：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
+            entry_new = tk.Entry(f1, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+            entry_new.pack(side="left", fill="x", expand=True)
+            entry_new.insert(0, old_word)
+            entry_new.focus_set()
+            entry_new.select_range(0, tk.END)
+            
+            f2 = tk.Frame(edit_win, bg=self.BG_DARK)
+            f2.pack(fill="x", padx=20, pady=4)
+            tk.Label(f2, text="所屬分類：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
+            import dictionary_manager
+            all_cats = dictionary_manager.get_categories()
+            edit_cat_var = tk.StringVar(value=old_cat if old_cat in all_cats else (all_cats[0] if all_cats else ""))
+            combo_cat = ttk.Combobox(f2, textvariable=edit_cat_var, values=all_cats, state="readonly", font=("Microsoft JhengHei", 9))
+            combo_cat.pack(side="left", fill="x", expand=True)
+            
+            def save_edit(event=None):
+                new_w = entry_new.get().strip()
+                new_c = edit_cat_var.get().strip()
+                if not new_w:
+                    self.toast("⚠️ 詞彙名稱不能為空", is_error=True, duration=2000)
+                    return
+                edit_win.destroy()
+                if dictionary_manager.edit_word(old_word, new_w, new_c):
+                    self.toast(f"✅ 已更新詞彙為「{new_w}」！", is_error=False, duration=2000)
+                    self._refresh_dictionary_list()
+                    if " / " in new_c:
+                        p, s = new_c.split(" / ", 1)
+                        if self._dict_tree.exists(f"cat_l1_{p}"):
+                            self._dict_tree.item(f"cat_l1_{p}", open=True)
+                        sub_id = f"cat_l2_{new_c}"
+                        if self._dict_tree.exists(sub_id):
+                            self._dict_tree.item(sub_id, open=True)
+                            wid = f"word_{p}_{s}_{new_w}"
+                            if self._dict_tree.exists(wid):
+                                self._dict_tree.selection_set(wid)
+                                self._dict_tree.see(wid)
+                    else:
+                        cid = f"cat_l1_{new_c}"
+                        if self._dict_tree.exists(cid):
+                            self._dict_tree.item(cid, open=True)
+                            wid = f"word_{new_c}_{new_w}"
+                            if self._dict_tree.exists(wid):
+                                self._dict_tree.selection_set(wid)
+                                self._dict_tree.see(wid)
+                else:
+                    self.toast("⚠️ 修改失敗，請確認詞彙有效性", is_error=True, duration=2000)
+                    
+            entry_new.bind("<Return>", save_edit)
+            edit_win.bind("<Escape>", lambda e: edit_win.destroy())
+            
+            btn_row = tk.Frame(edit_win, bg=self.BG_DARK)
+            btn_row.pack(pady=(12, 10))
+            tk.Button(
+                btn_row, text=" 💾 儲存修改 (Enter) ", command=save_edit,
+                font=("Microsoft JhengHei", 9, "bold"), bg="#2980b9", fg="white", bd=0, padx=12, pady=4
+            ).pack(side="left", padx=6)
+            tk.Button(
+                btn_row, text=" 取消 (Esc) ", command=edit_win.destroy,
+                font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
+            ).pack(side="left", padx=6)
+            
+        tk.Button(
+            add_box, text=" ✏️ 修改選取 ", command=do_edit_word,
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=8, pady=3
+        ).pack(side="left", padx=(0, 4))
+        
+        # 雙擊詞彙直接喚起修改
+        def on_tree_double_click(event):
+            item_id = self._dict_tree.identify_row(event.y)
+            if not item_id:
+                return
+            tags = self._dict_tree.item(item_id, "tags")
+            if "word" in tags:
+                do_edit_word(target_item_id=item_id)
+        self._dict_tree.bind("<Double-Button-1>", on_tree_double_click)
         
         def do_delete_word():
             sel = self._dict_tree.selection()
