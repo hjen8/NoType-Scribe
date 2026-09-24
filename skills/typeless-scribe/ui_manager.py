@@ -894,7 +894,7 @@ class UIManager:
             fg=self.FG_DIM, bg=self.BG_DARK
         ).pack(side="left")
         
-        self._dict_cat_var = tk.StringVar(value="地理、數學與學術名詞")
+        self._dict_cat_var = tk.StringVar(value="地理-氣候水文與大氣")
         self._dict_cat_menu = ttk.Combobox(
             add_box, textvariable=self._dict_cat_var,
             state="readonly", width=18, font=("Microsoft JhengHei", 9)
@@ -911,7 +911,7 @@ class UIManager:
         
         def do_add_word(event=None):
             val = self._dict_add_var.get().strip()
-            cat = self._dict_cat_var.get().strip() if hasattr(self, '_dict_cat_var') else "地理、數學與學術名詞"
+            cat = self._dict_cat_var.get().strip() if hasattr(self, '_dict_cat_var') else "地理-氣候水文與大氣"
             if val:
                 if dictionary_manager.add_word(val, category=cat):
                     self.toast(f"✅ 已新增「{val}」至【{cat}】！", is_error=False, duration=2000)
@@ -1003,7 +1003,7 @@ class UIManager:
             cat_list = list(self._all_categorized_words.keys())
             self._dict_cat_menu['values'] = cat_list
             if (not self._dict_cat_var.get() or self._dict_cat_var.get() not in cat_list) and cat_list:
-                self._dict_cat_var.set("地理、數學與學術名詞" if "地理、數學與學術名詞" in cat_list else cat_list[0])
+                self._dict_cat_var.set("地理-氣候水文與大氣" if "地理-氣候水文與大氣" in cat_list else cat_list[0])
                 
         self._filter_dictionary_list()
 
