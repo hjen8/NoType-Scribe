@@ -52,14 +52,22 @@ def transcribe_audio(file_path: str) -> str:
                 combined_words.append(w)
                 
         selected = []
-        curr_len = len(prompt_text)
+        base_prefix = "這是一段繁體中文逐字稿。"
+        test_prefix = base_prefix + " 常見詞："
+        curr_bytes = len(test_prefix.encode('utf-8'))
+        MAX_SAFE_BYTES = 700  # Groq Whisper 物理極限為 896 bytes (中文每字 3 bytes)，設 700 預留充足緩衝
+        
         for w in combined_words:
-            if curr_len + len(w) + 2 > 420:
+            w_bytes = len(w.encode('utf-8')) + 2  # 包含 ", " 2 bytes
+            if curr_bytes + w_bytes > MAX_SAFE_BYTES:
                 break
             selected.append(w)
-            curr_len += len(w) + 2
+            curr_bytes += w_bytes
+            
         if selected:
-            prompt_text += " 常見詞：" + ", ".join(selected)
+            prompt_text = test_prefix + ", ".join(selected)
+        else:
+            prompt_text = base_prefix
 
     last_err = None
     # 嘗試所有可用的 Groq Keys
@@ -80,6 +88,22 @@ def transcribe_audio(file_path: str) -> str:
         except Exception as e:
             err_str = str(e)
             last_err = e
+            # 若為 Prompt 過長或無效 Prompt 錯誤 (HTTP 400 invalid_prompt)，立即以極簡 Prompt 自動降級重試，絕不中斷辨識
+            if "prompt" in err_str.lower() or "400" in err_str:
+                print(f"[STT] Detected prompt issue ({err_str[:60]}), falling back to minimal prompt...")
+                try:
+                    with open(file_path, "rb") as file:
+                        return client.audio.transcriptions.create(
+                            file=(os.path.basename(file_path), file.read()),
+                            model="whisper-large-v3",
+                            prompt="這是一段繁體中文逐字稿。",
+                            response_format="text",
+                            language="zh"
+                        )
+                except Exception as fallback_err:
+                    last_err = fallback_err
+                    print(f"[STT] Minimal prompt fallback failed: {fallback_err}")
+            
             print(f"[STT] Failed ({err_str[:40]}...), rotating key...")
             if len(keys) > 1:
                 rotate_groq_key()
