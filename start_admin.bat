@@ -12,4 +12,5 @@ if %errorLevel% == 0 (
 
 :run
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500" >nul 2>&1
-start "" "e:\AI_Work\NoType\skills\typeless-scribe\venv\Scripts\pythonw.exe" "e:\AI_Work\NoType\skills\typeless-scribe\main.py"
+start "" "%~dp0skills\typeless-scribe\venv\Scripts\pythonw.exe" "%~dp0skills\typeless-scribe\main.py"
+

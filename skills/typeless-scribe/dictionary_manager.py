@@ -128,10 +128,16 @@ def save_hierarchy(hierarchy: list[dict]) -> bool:
                         if w and not w.startswith("#"):
                             f.write(f"{w}\n")
                     f.write("\n")
+        try:
+            from backup_manager import sync_to_backup
+            sync_to_backup()
+        except Exception:
+            pass
         return True
     except Exception as e:
         print(f"[Dictionary] Error saving hierarchy: {e}")
         return False
+
 
 def load_words() -> list[str]:
     """保持向後相容：回傳所有分類扁平化的唯一詞彙清單（提供 Whisper 與 LLM）"""

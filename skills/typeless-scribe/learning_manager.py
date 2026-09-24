@@ -25,8 +25,14 @@ def save_corrections(corrections: dict):
     try:
         with open(CORRECTIONS_FILE, "w", encoding="utf-8") as f:
             json.dump(corrections, f, ensure_ascii=False, indent=4)
+        try:
+            from backup_manager import sync_to_backup
+            sync_to_backup()
+        except Exception:
+            pass
     except Exception as e:
         print(f"[Learning] Error saving corrections: {e}")
+
 
 def append_to_dictionary(word: str):
     """如果詞彙不在 dictionary.txt 中，自動追加至字典末尾"""

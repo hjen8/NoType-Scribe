@@ -19,6 +19,12 @@ def load_config():
 def save_config(config):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
+    try:
+        from backup_manager import sync_to_backup
+        sync_to_backup()
+    except Exception:
+        pass
+
 
 def parse_keys_list(raw_keys) -> list:
     if not raw_keys:

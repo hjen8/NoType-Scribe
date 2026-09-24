@@ -22,6 +22,12 @@ from PIL import Image, ImageDraw
 import pystray
 from ui_manager import ui
 from keyboard_hook import KeyboardManager
+from backup_manager import restore_from_backup, sync_to_backup
+
+# 自動災難復原防護：若本地缺少關鍵設定，從 Dropbox 鏡像還原；啟動時靜默鏡像備份
+restore_from_backup()
+sync_to_backup()
+
 
 def create_image():
     # 生成一個簡單的藍色圓形圖示代表 NoType
