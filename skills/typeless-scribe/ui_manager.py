@@ -553,7 +553,7 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 500, 365
+        win_w, win_h = 500, 415
         sw = dialog.winfo_screenwidth()
         sh = dialog.winfo_screenheight()
         dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
@@ -586,7 +586,6 @@ class UIManager:
         entry_correct.bind("<Control-a>", lambda e: (entry_correct.select_range(0, tk.END), "break")[1])
         entry_wrong.bind("<Control-a>", lambda e: (entry_wrong.select_range(0, tk.END), "break")[1])
 
-        
         # 自動歸類分類選單
         import dictionary_manager
         from learning_manager import check_homophone_ambiguity
@@ -600,6 +599,15 @@ class UIManager:
         from tkinter import ttk
         cat_combo = ttk.Combobox(row_cat, textvariable=cat_var, values=cat_options, state="readonly", font=("Microsoft JhengHei", 9))
         cat_combo.pack(side="left", fill="x", expand=True)
+
+        # 語境限制 (可選，以逗號分隔關鍵詞，如：考卷, 考試)
+        row_ctx = tk.Frame(dialog, bg=self.BG_DARK)
+        row_ctx.pack(fill="x", padx=20, pady=3)
+        tk.Label(row_ctx, text="語境限制：", font=("Microsoft JhengHei", 9), fg="#3498db", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        context_var = tk.StringVar(value="")
+        entry_context = tk.Entry(row_ctx, textvariable=context_var, font=("Microsoft JhengHei", 9), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_context.pack(side="left", fill="x", expand=True)
+        entry_context.bind("<Control-a>", lambda e: (entry_context.select_range(0, tk.END), "break")[1])
         
         # 提示標籤
         hint_text = "💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正"
@@ -610,24 +618,53 @@ class UIManager:
             fg="#95a5a6", bg=self.BG_DARK,
             justify="left", anchor="w"
         )
-        lbl_hint.pack(anchor="w", padx=20, pady=(6, 10), fill="x")
+        lbl_hint.pack(anchor="w", padx=20, pady=(6, 8), fill="x")
 
+        is_updating_warning = False
         def update_ambiguity_warning(*args):
-            w = wrong_var.get().strip()
-            c = correct_var.get().strip()
-            amb = check_homophone_ambiguity(w, c)
-            if amb.get("is_ambiguous"):
-                lbl_hint.config(
-                    text=amb["warning"],
-                    fg="#f39c12",
-                    font=("Microsoft JhengHei", 8, "bold")
-                )
-            else:
-                lbl_hint.config(
-                    text="💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正",
-                    fg="#95a5a6",
-                    font=("Microsoft JhengHei", 8)
-                )
+            nonlocal is_updating_warning
+            if is_updating_warning:
+                return
+            is_updating_warning = True
+            try:
+                w = wrong_var.get().strip()
+                c = correct_var.get().strip()
+                amb = check_homophone_ambiguity(w, c)
+                current_ctx = context_var.get().strip()
+                
+                if amb.get("is_ambiguous"):
+                    # 若使用者尚未手動修改語境，且系統有推薦關鍵詞，自動預填推薦語境
+                    if not current_ctx and amb.get("suggested_context"):
+                        context_var.set(amb["suggested_context"])
+                        current_ctx = amb["suggested_context"]
+                    
+                    if current_ctx:
+                        lbl_hint.config(
+                            text=f"✅ 已設定語境限制（{current_ctx}）！\n僅在包含上述關鍵詞時替換，絕不誤傷其他前後用語。",
+                            fg="#2ecc71",
+                            font=("Microsoft JhengHei", 8, "bold")
+                        )
+                    else:
+                        lbl_hint.config(
+                            text=amb["warning"],
+                            fg="#f39c12",
+                            font=("Microsoft JhengHei", 8, "bold")
+                        )
+                else:
+                    if current_ctx:
+                        lbl_hint.config(
+                            text=f"💡 已設定語境限制（{current_ctx}）。僅在命中關鍵詞時執行替換。",
+                            fg="#3498db",
+                            font=("Microsoft JhengHei", 8)
+                        )
+                    else:
+                        lbl_hint.config(
+                            text="💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正",
+                            fg="#95a5a6",
+                            font=("Microsoft JhengHei", 8)
+                        )
+            finally:
+                is_updating_warning = False
 
         def on_correct_change(*args):
             txt = correct_var.get().strip()
@@ -639,6 +676,7 @@ class UIManager:
 
         correct_var.trace_add("write", on_correct_change)
         wrong_var.trace_add("write", update_ambiguity_warning)
+        context_var.trace_add("write", update_ambiguity_warning)
         update_ambiguity_warning()
         
         # 動作 1：僅本次替換 (不存入字典)
@@ -655,12 +693,16 @@ class UIManager:
             wrong = wrong_var.get().strip()
             correct = correct_var.get().strip()
             chosen_cat = cat_var.get().strip()
+            raw_ctx = context_var.get().strip()
+            import re
+            ctx_list = [c.strip() for c in re.split(r'[,，、\s]+', raw_ctx) if c.strip()] if raw_ctx else []
+            
             if not correct:
                 return
 
-            # 多義詞防呆二次攔截
+            # 多義詞防呆二次攔截（若已有明確語境限制，則屬於安全條件學習，免除高風險彈窗）
             amb = check_homophone_ambiguity(wrong, correct)
-            if amb.get("is_ambiguous"):
+            if amb.get("is_ambiguous") and not ctx_list:
                 from tkinter import messagebox
                 confirm = messagebox.askyesno(
                     "⚠️ 永久學習高風險警示",
@@ -674,8 +716,11 @@ class UIManager:
             
             dialog.destroy()
             from learning_manager import add_correction
-            add_correction(wrong, correct, category=chosen_cat)
-            self.toast(f"✅ 已替換並存入【{chosen_cat}】：「{correct}」！", is_error=False, duration=2500)
+            add_correction(wrong, correct, category=chosen_cat, contexts=ctx_list)
+            if ctx_list:
+                self.toast(f"✅ 已存入條件糾錯（語境：{','.join(ctx_list[:3])}）：「{correct}」！", is_error=False, duration=2500)
+            else:
+                self.toast(f"✅ 已替換並存入【{chosen_cat}】：「{correct}」！", is_error=False, duration=2500)
             if on_saved:
                 on_saved(correct)
             

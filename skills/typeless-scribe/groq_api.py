@@ -125,12 +125,12 @@ def get_active_chat_models(client, force_refresh=False) -> list:
         return _cached_models
     
     preferred_order = [
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-        "groq/compound-mini",
-        "groq/compound",
         "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
+        "llama-3.1-8b-instant",
+        "groq/compound",
+        "groq/compound-mini",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b"
     ]
     
     discovered = []

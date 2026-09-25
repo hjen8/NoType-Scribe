@@ -56,10 +56,10 @@ def append_to_dictionary(word: str):
     except Exception as e:
         print(f"[Learning] Error appending to dictionary: {e}")
 
-def add_correction(wrong_text: str, correct_text: str, category: str = None):
+def add_correction(wrong_text: str, correct_text: str, category: str = None, contexts: list = None):
     """
     新增一組糾錯記憶：
-    1. 寫入 corrections.json
+    1. 寫入 corrections.json (若有 contexts 則寫入結構化條件規則)
     2. 自動沉澱正確字詞至 dictionary.txt 中的指定分類
     """
     wrong_text = wrong_text.strip()
@@ -70,9 +70,16 @@ def add_correction(wrong_text: str, correct_text: str, category: str = None):
         
     if wrong_text and wrong_text != correct_text:
         corrections = load_corrections()
-        corrections[wrong_text] = correct_text
+        clean_contexts = [c.strip() for c in contexts if c and c.strip()] if contexts else []
+        if clean_contexts:
+            corrections[wrong_text] = {
+                "correct": correct_text,
+                "contexts": clean_contexts
+            }
+        else:
+            corrections[wrong_text] = correct_text
         save_corrections(corrections)
-        print(f"[Learning] Learned correction: '{wrong_text}' -> '{correct_text}'")
+        print(f"[Learning] Learned correction: '{wrong_text}' -> '{correct_text}' (contexts={clean_contexts})")
         
     # 自動將正確詞彙記入專屬字典並精準歸類
     try:
@@ -85,7 +92,7 @@ def add_correction(wrong_text: str, correct_text: str, category: str = None):
         append_to_dictionary(correct_text)
 
 def apply_corrections(text: str) -> str:
-    """套用所有已學習的糾錯記憶至文字中"""
+    """套用所有已學習的糾錯記憶至文字中 (支援短語優先與語境條件規則)"""
     if not text:
         return text
         
@@ -93,13 +100,20 @@ def apply_corrections(text: str) -> str:
     if not corrections:
         return text
         
-    # 依長度降序排序，長詞優先匹配替換
+    # 依長度降序排序，長詞/短語優先匹配替換
     sorted_pairs = sorted(corrections.items(), key=lambda x: len(x[0]), reverse=True)
     
-    for wrong, correct in sorted_pairs:
-        if wrong in text:
-            text = text.replace(wrong, correct)
-            
+    for wrong, rule in sorted_pairs:
+        if isinstance(rule, dict):
+            target_correct = rule.get("correct", "")
+            ctx_list = rule.get("contexts", [])
+            # 僅在句子包含任一語境關鍵字時才替換
+            if wrong in text and any(ctx in text for ctx in ctx_list):
+                text = text.replace(wrong, target_correct)
+        else:
+            if wrong in text:
+                text = text.replace(wrong, str(rule))
+                
     return text
 
 # =====================================================
@@ -143,30 +157,52 @@ HOMOPHONE_AMBIGUITY_SETS = [
     {"截距", "捷徑"},
 ]
 
+# 常見多義詞建議之語境關鍵詞（提供 Shift+F8 預填輔助）
+RECOMMENDED_CONTEXTS = {
+    ("全隊", "全對"): "考卷, 考試, 題目, 測驗, 答題, 滿分",
+    ("全對", "全隊"): "球隊, 中華隊, 隊員, 團隊, 集合, 比賽",
+    ("城市", "程式"): "代碼, 軟體, 開發, Python, 腳本, 執行, bug",
+    ("程式", "城市"): "鄉鎮, 市區, 建築, 人口, 交通, 都會, 發展",
+    ("在", "再"): "又, 一次, 見面, 說一遍, 考慮, 來一次",
+    ("再", "在"): "家, 學校, 這裡, 那裡, 正在, 進行",
+    ("權利", "權力"): "政治, 政府, 掌權, 統治, 國家, 機關",
+    ("權力", "權利"): "義務, 人權, 法律, 享用, 保障, 侵犯",
+    ("做", "作"): "作文, 作品, 作業, 作息, 作戰",
+    ("作", "做"): "做事, 做好, 做飯, 做人, 做工",
+    ("終點", "中點"): "線段, 三角形, 坐標, 距離, 幾何",
+    ("中點", "終點"): "起點, 衝線, 跑步, 馬拉松, 比賽",
+    ("截距", "捷徑"): "坐標, 直線, 斜率, 方程式, 函數",
+    ("捷徑", "截距"): "抄, 近路, 快速, 方法, 走",
+}
+
 def check_homophone_ambiguity(wrong_text: str, correct_text: str) -> dict:
     """
     檢測 (wrong_text, correct_text) 是否屬於依賴上下文之同音多義詞：
-    - 若兩者命中多義詞庫，回傳 is_ambiguous=True 以及明確的警示文字與彈窗說明
+    - 若兩者命中多義詞庫，回傳 is_ambiguous=True、建議語境關鍵詞與明確警示
     """
     w = wrong_text.strip()
     c = correct_text.strip()
     if not w or not c or w == c:
-        return {"is_ambiguous": False, "reason": ""}
+        return {"is_ambiguous": False, "reason": "", "suggested_context": ""}
         
     for s in HOMOPHONE_AMBIGUITY_SETS:
         if w in s and c in s:
+            suggested = RECOMMENDED_CONTEXTS.get((w, c), "")
             return {
                 "is_ambiguous": True,
                 "reason": f"「{w}」與「{c}」皆為常見合法詞彙（依前後文決定）",
-                "warning": f"⚠️ 警示：『{w}』與『{c}』皆為常見合法詞彙（依前後文決定）！\n建議使用 Enter（僅本次替換），切勿永久學習，避免全域誤傷！",
+                "suggested_context": suggested,
+                "warning": f"⚠️ 警示：『{w}』與『{c}』皆為合法詞彙！請填寫下方「語境限制」或改用 Enter 單次替換",
                 "popup_msg": (
                     f"「{w}」與「{c}」皆為合法常用詞彙！\n\n"
-                    f"若將其寫入永久糾錯庫，未來在所有語境中只要出現「{w}」，\n"
+                    f"您尚未設定「語境限制關鍵詞」！\n"
+                    f"若將其直接寫入永久全域糾錯，未來只要出現「{w}」，\n"
                     f"都會被強制無差別替換為「{c}」，極易引發其他語意的誤傷！\n\n"
-                    f"確定仍要將其永久寫入糾錯庫嗎？\n"
-                    f"(建議點選『否』，改用 Enter 僅本次替換)"
+                    f"建議取消並在「語境限制」欄位填入觸發關鍵詞（如 考卷, 考試），\n"
+                    f"或改按 Enter 僅本次替換。\n\n"
+                    f"確定仍要無條件強制全域替換嗎？"
                 )
             }
             
-    return {"is_ambiguous": False, "reason": ""}
+    return {"is_ambiguous": False, "reason": "", "suggested_context": ""}
 
