@@ -1559,7 +1559,7 @@ class UIManager:
         dialog.attributes("-topmost", True)
         self.student_reminder_win = dialog
         
-        w, h = 530, 360
+        w, h = 560, 360
         sw = dialog.winfo_screenwidth()
         sh = dialog.winfo_screenheight()
         dialog.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
@@ -1584,9 +1584,9 @@ class UIManager:
         ).pack(anchor="w")
         
         desc_text = (
-            "長官您好！現在是 7 月暑假與新學年度交接期，考量舊生畢業離班與新生入學，"
-            "是否需要檢視或更新專屬字典中的【學生人名】清單？\n\n"
-            "★ 更新【學生人名】可確保新學年度語音輸入 100% 精準命中新生姓名，"
+            "長官您好！現在是 7 月暑假與新學年度交接期，\n"
+            "考量舊生畢業離班與新生入學，是否需要檢視或更新專屬字典中的【學生人名】清單？\n\n"
+            "★ 更新【學生人名】可確保新學年度語音輸入 100% 精準命中新生姓名，\n"
             "享有最高優先先發優勢與同音防錯保險！（同事與親友人名不受影響）"
         )
         
@@ -1597,7 +1597,7 @@ class UIManager:
             body, text=desc_text,
             font=("Microsoft JhengHei", 10),
             fg=self.FG_TEXT, bg=self.BG_DARK,
-            justify="left", wraplength=490
+            justify="left", wraplength=520
         ).pack(anchor="w", pady=(0, 15))
         
         # --- 操作選項按鈕區 ---
