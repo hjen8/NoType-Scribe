@@ -54,6 +54,9 @@ def on_import_dictionary(icon, item):
 def on_export_dictionary(icon, item):
     ui.msg_queue.put('export_dictionary')
 
+def on_test_student_reminder(icon, item):
+    ui.msg_queue.put('open_student_reminder')
+
 def on_open_dictionary_notepad(icon, item):
     import subprocess
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
@@ -104,8 +107,8 @@ def run_tray():
                 pystray.MenuItem('📥 匯入字典 (Import)...', on_import_dictionary),
                 pystray.MenuItem('📤 匯出字典 (Export)...', on_export_dictionary),
                 pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
-                pystray.MenuItem('🎓 測試 7 月學生名單提醒...', lambda icon, item: ui.msg_queue.put('open_student_reminder')),
             )),
+            pystray.MenuItem('🎓 測試 7 月學生名單提醒...', on_test_student_reminder),
             pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
             pystray.MenuItem('📖 操作說明與快捷鍵 (README)', on_open_help),
             pystray.MenuItem('離開 (Quit)', on_quit),

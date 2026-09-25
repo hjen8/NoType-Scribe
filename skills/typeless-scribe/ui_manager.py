@@ -1640,6 +1640,9 @@ class UIManager:
             bd=0, padx=8, pady=5, cursor="hand2"
         )
         btn_done.pack(side="right", fill="x", expand=True, padx=(4, 0))
+        
+        dialog.lift()
+        dialog.focus_force()
 
     def process_queue(self):
         try:
