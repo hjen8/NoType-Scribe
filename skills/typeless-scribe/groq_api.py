@@ -11,7 +11,8 @@ def get_client(api_key=None):
     key = api_key or get_current_groq_key()
     if not key:
         return None
-    return Groq(api_key=key)
+    # 設置 timeout=8.0 與 max_retries=1，徹底杜絕 SDK 面對 429 時在後台死等 20~70 秒之惡性卡頓
+    return Groq(api_key=key, timeout=8.0, max_retries=1)
 
 def get_dictionary_words() -> str:
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
@@ -118,20 +119,33 @@ def transcribe_audio(file_path: str) -> str:
     raise last_err
 
 _cached_models = []
+_model_penalties = {}  # {model_name: penalty_until_timestamp}
+
+def penalize_model(model_name: str, duration: int = 1800):
+    """將遭遇 429、超時或異常的模型暫時打入冷宮降權，優先由其他高速模型接替"""
+    import time
+    _model_penalties[model_name] = time.time() + duration
+    print(f"[Groq] 模型 {model_name} 已列入降權處罰名單，{duration} 秒內不作第一首選")
 
 def get_active_chat_models(client, force_refresh=False) -> list:
     global _cached_models
-    if _cached_models and not force_refresh:
-        return _cached_models
+    import time
+    now = time.time()
     
     preferred_order = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
+        "qwen/qwen3.8-27b",          # 實測 0.25s 極速，中文繁體能力極佳且配額充裕
+        "llama-3.3-70b-versatile",   # 70B 旗艦 (若帳號開放即納入前線)
+        "llama-3.1-8b-instant",      # 8B 極速 (若帳號開放即納入前線)
+        "openai/gpt-oss-120b",       # 0.8s 備援，大容量配額
         "groq/compound",
         "groq/compound-mini",
-        "openai/gpt-oss-120b",
-        "openai/gpt-oss-20b"
+        "openai/gpt-oss-20b"         # 降至末端備援 (TPM 僅 8k，易爆 429)
     ]
+    
+    if _cached_models and not force_refresh:
+        valid = [m for m in _cached_models if _model_penalties.get(m, 0) <= now]
+        penalized = [m for m in _cached_models if _model_penalties.get(m, 0) > now]
+        return valid + penalized
     
     discovered = []
     try:
@@ -160,8 +174,9 @@ def get_active_chat_models(client, force_refresh=False) -> list:
         discovered = preferred_order
         
     _cached_models = discovered
-    print(f"[Groq] Active models: {_cached_models}")
-    return _cached_models
+    valid = [m for m in _cached_models if _model_penalties.get(m, 0) <= now]
+    penalized = [m for m in _cached_models if _model_penalties.get(m, 0) > now]
+    return valid + penalized
 
 def generate_notes_gemini(transcript: str, system_prompt: str) -> str:
     gemini_key = get_gemini_api_key()
@@ -380,13 +395,18 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                         if on_model_switch and len(updated_models) > idx + 1:
                             on_model_switch(f"💡 NoType 提示：已自動切換至最新在線模型 {updated_models[idx+1]}")
                         continue
-                    elif "429" in err_str or "rate_limit" in err_str:
-                        # 當前 Key 額度滿了，若有多組 Key 則輪替
-                        if len(groq_keys) > 1:
+                    elif "429" in err_str or "rate_limit" in err_str or "timeout" in err_str.lower():
+                        # 動態將該模型打入冷宮，避免後續請求再次被它拖垮
+                        penalize_model(model_name, duration=1800)
+                        # 若當前 Key 還有其他備用模型，優先嘗試下一個在線模型 (例如 70B 受限換 8B)
+                        if idx < len(models_to_try) - 1:
+                            print(f"🔄 模型 {model_name} 觸發速率限制，立刻切換至下一個在線模型...")
+                            continue
+                        elif len(groq_keys) > 1:
                             rotate_groq_key()
                             if on_model_switch:
                                 on_model_switch("💡 NoType 提示：當前金鑰額度已滿，已自動輪替至備用金鑰")
-                            break # 跳出當前 Key 的模型循環，進入下一組 Key
+                            break
                     elif "401" in err_str or "invalid_api_key" in err_msg if 'err_msg' in locals() else False:
                         if len(groq_keys) > 1:
                             rotate_groq_key()
