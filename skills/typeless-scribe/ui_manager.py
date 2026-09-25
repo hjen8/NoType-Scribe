@@ -553,7 +553,7 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 480, 330
+        win_w, win_h = 500, 365
         sw = dialog.winfo_screenwidth()
         sh = dialog.winfo_screenheight()
         dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
@@ -568,10 +568,9 @@ class UIManager:
         row1 = tk.Frame(dialog, bg=self.BG_DARK)
         row1.pack(fill="x", padx=20, pady=3)
         tk.Label(row1, text="聽錯的詞：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
-        entry_wrong = tk.Entry(row1, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        wrong_var = tk.StringVar(value=wrong_text if wrong_text else "")
+        entry_wrong = tk.Entry(row1, textvariable=wrong_var, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
         entry_wrong.pack(side="left", fill="x", expand=True)
-        if wrong_text:
-            entry_wrong.insert(0, wrong_text)
             
         # 正確的詞
         row2 = tk.Frame(dialog, bg=self.BG_DARK)
@@ -590,6 +589,7 @@ class UIManager:
         
         # 自動歸類分類選單
         import dictionary_manager
+        from learning_manager import check_homophone_ambiguity
         cat_options = dictionary_manager.get_categories()
         default_pred = dictionary_manager.predict_category(wrong_text)
         cat_var = tk.StringVar(value=default_pred if default_pred in cat_options else (cat_options[0] if cat_options else ""))
@@ -601,27 +601,49 @@ class UIManager:
         cat_combo = ttk.Combobox(row_cat, textvariable=cat_var, values=cat_options, state="readonly", font=("Microsoft JhengHei", 9))
         cat_combo.pack(side="left", fill="x", expand=True)
         
-        def on_correct_change(*args):
-            txt = correct_var.get().strip()
-            if txt:
-                pred = dictionary_manager.predict_category(txt)
-                if pred in cat_options:
-                    cat_var.set(pred)
-        correct_var.trace_add("write", on_correct_change)
-        
         # 提示標籤
         hint_text = "💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正"
         lbl_hint = tk.Label(
             dialog, 
             text=hint_text, 
             font=("Microsoft JhengHei", 8),
-            fg="#95a5a6", bg=self.BG_DARK
+            fg="#95a5a6", bg=self.BG_DARK,
+            justify="left", anchor="w"
         )
-        lbl_hint.pack(anchor="w", padx=20, pady=(6, 12))
+        lbl_hint.pack(anchor="w", padx=20, pady=(6, 10), fill="x")
+
+        def update_ambiguity_warning(*args):
+            w = wrong_var.get().strip()
+            c = correct_var.get().strip()
+            amb = check_homophone_ambiguity(w, c)
+            if amb.get("is_ambiguous"):
+                lbl_hint.config(
+                    text=amb["warning"],
+                    fg="#f39c12",
+                    font=("Microsoft JhengHei", 8, "bold")
+                )
+            else:
+                lbl_hint.config(
+                    text="💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正",
+                    fg="#95a5a6",
+                    font=("Microsoft JhengHei", 8)
+                )
+
+        def on_correct_change(*args):
+            txt = correct_var.get().strip()
+            if txt:
+                pred = dictionary_manager.predict_category(txt)
+                if pred in cat_options:
+                    cat_var.set(pred)
+            update_ambiguity_warning()
+
+        correct_var.trace_add("write", on_correct_change)
+        wrong_var.trace_add("write", update_ambiguity_warning)
+        update_ambiguity_warning()
         
         # 動作 1：僅本次替換 (不存入字典)
         def replace_once(event=None):
-            correct = entry_correct.get().strip()
+            correct = correct_var.get().strip()
             dialog.destroy()
             if correct:
                 self.toast(f"✅ 已替換文字為「{correct}」（未存入字典）！", is_error=False, duration=2000)
@@ -630,16 +652,32 @@ class UIManager:
                     
         # 動作 2：永久學習並替換
         def replace_and_learn(event=None):
-            wrong = entry_wrong.get().strip()
-            correct = entry_correct.get().strip()
+            wrong = wrong_var.get().strip()
+            correct = correct_var.get().strip()
             chosen_cat = cat_var.get().strip()
+            if not correct:
+                return
+
+            # 多義詞防呆二次攔截
+            amb = check_homophone_ambiguity(wrong, correct)
+            if amb.get("is_ambiguous"):
+                from tkinter import messagebox
+                confirm = messagebox.askyesno(
+                    "⚠️ 永久學習高風險警示",
+                    amb["popup_msg"],
+                    parent=dialog
+                )
+                if not confirm:
+                    # 使用者選擇否，取消永久學習，不關閉視窗，焦點切換至「僅本次替換」
+                    btn_replace_once.focus_set()
+                    return
+            
             dialog.destroy()
-            if correct:
-                from learning_manager import add_correction
-                add_correction(wrong, correct, category=chosen_cat)
-                self.toast(f"✅ 已替換並存入【{chosen_cat}】：「{correct}」！", is_error=False, duration=2500)
-                if on_saved:
-                    on_saved(correct)
+            from learning_manager import add_correction
+            add_correction(wrong, correct, category=chosen_cat)
+            self.toast(f"✅ 已替換並存入【{chosen_cat}】：「{correct}」！", is_error=False, duration=2500)
+            if on_saved:
+                on_saved(correct)
             
         def cancel(event=None):
             dialog.destroy()
@@ -654,18 +692,20 @@ class UIManager:
         btn_box.pack(pady=4)
         
         # 1. 僅本次替換
-        tk.Button(
+        btn_replace_once = tk.Button(
             btn_box, text=" 僅本次替換 (Enter) ", command=replace_once,
             font=("Microsoft JhengHei", 9, "bold"),
             bg="#2980b9", fg="white", bd=0, padx=10, pady=4
-        ).pack(side="left", padx=6)
+        )
+        btn_replace_once.pack(side="left", padx=6)
         
         # 2. 永久學習並替換
-        tk.Button(
+        btn_replace_learn = tk.Button(
             btn_box, text=" 永久學習並替換 (Shift+Enter) ", command=replace_and_learn,
             font=("Microsoft JhengHei", 9, "bold"),
             bg="#27ae60", fg="white", bd=0, padx=10, pady=4
-        ).pack(side="left", padx=6)
+        )
+        btn_replace_learn.pack(side="left", padx=6)
         
         # 3. 取消
         tk.Button(
