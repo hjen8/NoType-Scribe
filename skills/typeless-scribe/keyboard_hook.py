@@ -4,7 +4,7 @@ import pyperclip
 import time
 from ui_manager import ui
 from audio_logic import AudioRecorder
-from groq_api import transcribe_audio, generate_notes
+from groq_api import transcribe_audio, generate_notes, safe_print
 from history_manager import HistoryRecord, add_record
 
 # 將所有可能的 Alt 鍵名稱統一列出，確保相容性
@@ -269,17 +269,17 @@ class KeyboardManager:
             try:
                 refined_text = generate_notes(transcript, on_model_switch=notify_switch, app_mode=app_mode)
             except Exception as llm_err:
-                print(f"[LLM Fallback] ⚠️ LLM 服務異常 ({llm_err})，自動降級使用原始逐字稿並套用糾錯字典！")
+                safe_print(f"[LLM Fallback] ⚠️ LLM 服務異常 ({llm_err})，自動降級使用原始逐字稿並套用糾錯字典！")
                 from learning_manager import apply_corrections
                 from groq_api import apply_dictionary_post_process
                 refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip()))
                 
-            print(f"[LLM] Done ({time.time()-start:.1f}s): {refined_text}")
+            safe_print(f"[LLM] Done ({time.time()-start:.1f}s): {refined_text}")
             
             # 【物理層零空值熔斷保險 (Zero-Empty Fallback)】
             # 若 LLM 回傳空字串或僅含空白，強制自動降級使用原始逐字稿，徹底杜絕空字串存檔與貼空
             if not refined_text or not refined_text.strip():
-                print("[LLM Fallback] ⚠️ LLM 回傳空字串，自動降級使用原始逐字稿！")
+                safe_print("[LLM Fallback] ⚠️ LLM 回傳空字串，自動降級使用原始逐字稿！")
                 from learning_manager import apply_corrections
                 from groq_api import apply_dictionary_post_process
                 refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip()))

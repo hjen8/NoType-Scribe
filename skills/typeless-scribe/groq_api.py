@@ -1,4 +1,5 @@
 import os
+import sys
 from groq import Groq
 from config_manager import (
     get_all_groq_keys, 
@@ -6,6 +7,23 @@ from config_manager import (
     rotate_groq_key, 
     get_gemini_api_key
 )
+
+def safe_print(*args, **kwargs):
+    """Windows CP950 安全印出函式，杜絕 UnicodeEncodeError (如 emoji \u26a0, \U0001f4a1 等) 導致之例外中斷"""
+    try:
+        print(*args, **kwargs)
+    except UnicodeEncodeError:
+        try:
+            encoding = sys.stdout.encoding or 'cp950'
+            safe_args = [
+                str(a).encode(encoding, errors='replace').decode(encoding)
+                for a in args
+            ]
+            print(*safe_args, **kwargs)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 def get_client(api_key=None):
     key = api_key or get_current_groq_key()
@@ -37,14 +55,8 @@ def transcribe_audio(file_path: str) -> str:
         from learning_manager import load_corrections
         corrections = load_corrections()
         
-        # 1. 優先詞庫：核心電腦名詞 + 自適應學習庫中的正確詞彙
-        high_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill", "人名"]
-        for correct in corrections.values():
-            target = correct if isinstance(correct, str) else correct.get("correct", "")
-            if target and target not in high_priority:
-                high_priority.append(target)
-                
-        # 2. 自動提取親友與學生人名納入高優先先發 (確保語昕、陳語昕等 100% 入選 Whisper 700 bytes)
+        # 1. 【第一順位絕對先發】：親友與學生人名 (56 詞，約 585 bytes，100% 絕對優先佔位，確保霈沄、語昕全入選 Whisper 700 bytes)
+        name_priority = []
         try:
             import dictionary_manager
             hierarchy = dictionary_manager.load_hierarchy()
@@ -52,17 +64,24 @@ def transcribe_audio(file_path: str) -> str:
                 cat_name = cat.get("name", "")
                 if any(k in cat_name for k in ["人名", "親友", "家人"]):
                     for nw in cat.get("words", []):
-                        if nw not in high_priority:
-                            high_priority.append(nw)
+                        if nw not in name_priority:
+                            name_priority.append(nw)
         except Exception:
             pass
+            
+        # 2. 【第二順位先發】：核心電腦名詞、同音消歧義與自適應學習庫正確詞彙
+        core_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill", "人名", "全對", "霈沄", "語昕"]
+        for correct in corrections.values():
+            target = correct if isinstance(correct, str) else correct.get("correct", "")
+            if target and target not in core_priority and target not in name_priority:
+                core_priority.append(target)
                 
         dict_words = [w.strip() for w in custom_words.split(', ') if w.strip()]
         # 字典逆序（最新沉澱的詞最優先）
         reversed_dict = list(reversed(dict_words))
         
         combined_words = []
-        for w in high_priority + reversed_dict + dict_words:
+        for w in name_priority + core_priority + reversed_dict + dict_words:
             if w not in combined_words:
                 combined_words.append(w)
                 
@@ -220,6 +239,16 @@ def apply_dictionary_post_process(text: str) -> str:
     # 0. 先套用自適應學習映射庫 (corrections.json)
     text = apply_corrections(text)
     
+    # 0.5 親友與學生人名常見同音誤判物理加固 (0 毫秒物理兜底，徹底杜絕同音漏網之魚)
+    name_homophones = {
+        "佩雲": "霈沄",
+        "陳佩雲": "陳霈沄",
+        "雨昕": "語昕",
+        "陳雨昕": "陳語昕",
+    }
+    for wrong, right in name_homophones.items():
+        text = text.replace(wrong, right)
+    
     custom_words = get_dictionary_words()
     if not custom_words:
         return text
@@ -363,16 +392,42 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "GIS 系統操作、以及高中地理專有名詞。"
     )
     
-    custom_words = get_dictionary_words()
-    if custom_words:
+    # 提取親友與學生人名 vs 一般專科詞庫，分流加強 Prompt
+    name_words = []
+    other_words = []
+    try:
+        import dictionary_manager
+        hierarchy = dictionary_manager.load_hierarchy()
+        for cat in hierarchy:
+            cat_name = cat.get("name", "")
+            words = cat.get("words", [])
+            if any(k in cat_name for k in ["人名", "親友", "家人"]):
+                for w in words:
+                    if w not in name_words:
+                        name_words.append(w)
+            else:
+                for w in words:
+                    if w not in other_words:
+                        other_words.append(w)
+    except Exception:
+        pass
+
+    if name_words:
+        names_str = ", ".join(name_words)
         system_prompt += (
-            f"\n\n【專屬字典強制替換】：\n"
-            f"以下是使用者常說的專有名詞、親友人名與專門詞庫清單：\n[{custom_words}]\n"
+            f"\n\n【最高優先權：親友與學生人名名單】：\n"
+            f"以下是使用者最核心的親友、家人與學生姓名專區：\n[{names_str}]\n"
+            f"★【人名絕對最高權重】：若逐字稿中出現任何與上述姓名「發音相同、同音異字或極度相近」的詞彙（例如：佩雲/沛雲->霈沄、雨昕/雨欣->語昕、省無->省峿、培毅->培亦），必須 100% 強制替換為上述名單中的正確人名！\n"
+            f"人名修正權重絕對凌駕於任何常見生活用詞，即使逐字稿原本寫的是常見合法姓名（如『佩雲』），只要在名單中有對應發音之專屬姓名（『霈沄』），一律強制修正為名單中的寫法！\n"
+        )
+    if other_words:
+        other_str = ", ".join(other_words)
+        system_prompt += (
+            f"\n\n【專科領域與專有名詞清單】：\n"
+            f"[{other_str}]\n"
             f"只要發現逐字稿中有與字典詞彙「發音相同、同音異字、繁簡異體字（例如把『覆盤』寫成『復盤』）」、或「英文大小寫不同（例如把『Skill』寫成『skill』）」，"
             f"【請一律強制替換為字典中的正確寫法】！\n"
-            f"【親友人名與專有名詞特別權重】：字典中的親友人名（如『語昕、陳語昕』等）具有最高優先權！只要發音相同（例如聽成『雨昕、雨欣、宇昕』），必須 100% 強制替換為字典人名『語昕』，絕不可保留常見同音字！\n"
-            f"【防過度糾正警告】：如果逐字稿中的名字或名詞，與字典裡的發音明顯不同（例如使用者說『林志強』但字典只有『林政弘』），請保持原樣，絕對不可以強行套用字典！\n"
-            f"【輸出要求】：請默默完成上述替換，絕對不可以加上任何「注意：根據字典...」或「已將...修正為...」的附註說明！只輸出最終修飾好的純文字。"
+            f"【輸出要求】：請默默完成上述替換，絕對不可以加上任何「注意：根據字典...」或說明！只輸出最終修飾好的純文字。\n"
         )
         
     # 依當前前景視窗 App 模式動態微調修飾風格 (App-Aware Dynamic Tone Adaptation)
@@ -433,15 +488,15 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                     if raw_res:
                         return apply_dictionary_post_process(raw_res)
                     else:
-                        print(f"⚠️ 模型 {model_name} 輸出空字串，嘗試下一個在線模型...")
+                        safe_print(f"⚠️ 模型 {model_name} 輸出空字串，嘗試下一個在線模型...")
                         continue
                 except Exception as e:
                     err_str = str(e)
-                    print(f"⚠️ 模型 {model_name} 執行失敗: {err_str}")
+                    safe_print(f"⚠️ 模型 {model_name} 執行失敗: {err_str}")
                     last_err = e
                     
                     if "404" in err_str or "model_not_found" in err_str:
-                        print(f"🔄 偵測到模型 {model_name} 已下架，重新探索最新模型...")
+                        safe_print(f"🔄 偵測到模型 {model_name} 已下架，重新探索最新模型...")
                         updated_models = get_active_chat_models(client, force_refresh=True)
                         if on_model_switch and len(updated_models) > idx + 1:
                             on_model_switch(f"💡 NoType 提示：已自動切換至最新在線模型 {updated_models[idx+1]}")
@@ -451,7 +506,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                         penalize_model(model_name, duration=60)
                         # 若當前 Key 還有其他備用模型，優先嘗試下一個在線模型 (例如 70B 受限換 8B)
                         if idx < len(models_to_try) - 1:
-                            print(f"🔄 模型 {model_name} 觸發速率限制，立刻切換至下一個在線模型...")
+                            safe_print(f"🔄 模型 {model_name} 觸發速率限制，立刻切換至下一個在線模型...")
                             continue
                         elif len(groq_keys) > 1:
                             rotate_groq_key()
@@ -468,16 +523,16 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
     gemini_key = get_gemini_api_key()
     if gemini_key:
         try:
-            print("🔄 啟動 Gemini 雙保險備援修飾...")
+            safe_print("🔄 啟動 Gemini 雙保險備援修飾...")
             res = generate_notes_gemini(transcript, system_prompt)
             if res and res.strip():
                 if on_model_switch:
                     on_model_switch("💡 NoType 提示：Groq 暫時受限，已無縫啟動 Gemini 雙保險備援")
                 return apply_dictionary_post_process(res.strip())
             else:
-                print("⚠️ Gemini 備援回傳空字串")
+                safe_print("⚠️ Gemini 備援回傳空字串")
         except Exception as ge:
-            print(f"⚠️ Gemini 備援亦失敗: {ge}")
+            safe_print(f"⚠️ Gemini 備援亦失敗: {ge}")
             
     # 若完全沒有設定 Key
     if not groq_keys and not gemini_key:
@@ -485,7 +540,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         
     # 若在線模型皆未回傳非空字串（無拋出例外），啟動極限物理保險回退至原始逐字稿
     if not last_err and transcript and transcript.strip():
-        print("⚠️ 所有在線模型皆未產出非空文字，自動降級使用原始逐字稿保險")
+        safe_print("⚠️ 所有在線模型皆未產出非空文字，自動降級使用原始逐字稿保險")
         return apply_dictionary_post_process(transcript.strip())
         
     err_msg = str(last_err)
