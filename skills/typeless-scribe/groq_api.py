@@ -11,8 +11,8 @@ def get_client(api_key=None):
     key = api_key or get_current_groq_key()
     if not key:
         return None
-    # 設置 timeout=8.0 與 max_retries=1，徹底杜絕 SDK 面對 429 時在後台死等 20~70 秒之惡性卡頓
-    return Groq(api_key=key, timeout=8.0, max_retries=1)
+    # 設置 timeout=6.0 與 max_retries=0，徹底杜絕 SDK 面對 429 時在後台 sleep 死等 20~70 秒之惡性卡頓，遭遇 429 立刻拋出由 NoType 毫秒級自動切換備援
+    return Groq(api_key=key, timeout=6.0, max_retries=0)
 
 def get_dictionary_words() -> str:
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
@@ -121,8 +121,8 @@ def transcribe_audio(file_path: str) -> str:
 _cached_models = []
 _model_penalties = {}  # {model_name: penalty_until_timestamp}
 
-def penalize_model(model_name: str, duration: int = 1800):
-    """將遭遇 429、超時或異常的模型暫時打入冷宮降權，優先由其他高速模型接替"""
+def penalize_model(model_name: str, duration: int = 60):
+    """將遭遇 429、超時或異常的模型暫時打入冷宮降權，優先由其他高速模型接替 (Groq TPM 為 1 分鐘滾動窗口，預設處罰 60 秒)"""
     import time
     _model_penalties[model_name] = time.time() + duration
     print(f"[Groq] 模型 {model_name} 已列入降權處罰名單，{duration} 秒內不作第一首選")
@@ -314,6 +314,32 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "    - 「詞疊 / 磁疊 / 刺碟」-> 100% 強制修正為「磁碟」（特別在『S磁碟、C磁碟、磁碟機、檔案、目錄、RAMDISK』等電腦語境）。\n"
         "    - 「S疊 / S跌 / S蝶 / SDA」-> 100% 強制修正為「S碟」或「S磁碟」。\n"
         "    - 「城市」在軟體、執行、代碼、操作語境下（例如『希望我們這個程式能夠...』、『後台運行的程式』、『撰寫程式』）-> 必須強制修正為「程式」，絕非地理名詞『城市』！\n"
+        "12. 【常見合法同音異義詞之全自動前後文語意消歧義 (Context-Aware Homophone Disambiguation)】：\n"
+        "    - 核心原則：以下成對詞彙發音完全相同且各自合法，你必須嚴格根據整句話的『前後文意境』精準選用正確詞彙，絕不可張冠李戴！\n"
+        "    - 『全對』vs『全隊』：\n"
+        "      * 指全部正確、答對、考試、測驗、考卷、滿分、答案時（例如『這份考卷小明竟然全對』、『你的答案全對』）-> 必須輸出「全對」！\n"
+        "      * 指全體隊員、團隊、球隊、全體成員、中華隊、全隊出動時（例如『中華隊全隊集合』、『全隊太棒了』）-> 必須輸出「全隊」！\n"
+        "    - 『程式』vs『城市』：\n"
+        "      * 指代碼、軟體、腳本、寫、執行、運作、系統、bug 時（例如『執行這個程式』、『寫程式』）-> 必須輸出「程式」！\n"
+        "      * 指都會、鄉鎮、市區、人口、聚落、建築、街道時（例如『臺北是一個繁華的城市』）-> 必須輸出「城市」！\n"
+        "    - 『再』vs『在』：\n"
+        "      * 表時間延續、又一次、重來、第二次、再見、再次、再考慮時（例如『下次再見』、『再說一次』）-> 必須輸出「再」！\n"
+        "      * 表地點、存在、正在進行、在家時（例如『他在學校』、『正在開會』）-> 必須輸出「在」！\n"
+        "    - 『權利』vs『權力』：\n"
+        "      * 表法律賦予之利益、主張、人權、著作權時（例如『維護自身權利』、『享有言論自由的權利』）-> 必須輸出「權利」！\n"
+        "      * 表政治統治力量、支配、公權力、掌權、機關職權時（例如『行使公權力』、『國家權力』）-> 必須輸出「權力」！\n"
+        "    - 『中點』vs『終點』：\n"
+        "      * 指幾何線段、三角形、坐標中點時（例如『線段 AB 的中點』）-> 必須輸出「中點」！\n"
+        "      * 指跑步、馬拉松、比賽結束、抵達目標時（例如『抵達馬拉松終點』）-> 必須輸出「終點」！\n"
+        "    - 『做』vs『作』：\n"
+        "      * 指具體動作、製造、做飯、做好、做人、做事時（例如『把這件事做好』、『做筆記』）-> 必須輸出「做」！\n"
+        "      * 指抽象從事、作文、作品、作業、作息、作戰、作風、作用時（例如『寫作業』、『完成這部作品』）-> 必須輸出「作」！\n"
+        "    - 『制定』vs『制訂』：\n"
+        "      * 指法律、憲法、政策、法規（正式創制）時（例如『制定法律』、『制定憲法』）-> 必須輸出「制定」！\n"
+        "      * 指計畫、草案、規範、方案（訂立協議細節）時（例如『制訂計畫』、『制訂合約』）-> 必須輸出「制訂」！\n"
+        "    - 『反映』vs『反應』：\n"
+        "      * 指意見反饋、向上級陳情、客觀表現時（例如『反映民意』、『反映問題』）-> 必須輸出「反映」！\n"
+        "      * 指物理/化學變化、感官刺激或心理應對時（例如『化學反應』、『反應遲鈍』）-> 必須輸出「反應」！\n"
         "【嚴格禁止】：絕對不可以回答使用者的問題！絕對不可以跟使用者對話！絕對不可以擅自摘要未被否決的有效內容！\n"
         "【重要輸出防線】：即使逐字稿語意為提問、反問、質疑、抱怨或指令（例如包含『為什麼...』、『請幫我...』），你也【絕對不可回答問題，亦絕對不可輸出空白】！你唯一的任務是原樣修飾該段文字並輸出！使用者說什麼，你就修飾輸出什麼！\n"
         "特別注意：使用者是一位高中地理教師，內容常涉及『探究與實作』課程、SDGs (例如 5 種角色扮演設定)、"
@@ -396,8 +422,8 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                             on_model_switch(f"💡 NoType 提示：已自動切換至最新在線模型 {updated_models[idx+1]}")
                         continue
                     elif "429" in err_str or "rate_limit" in err_str or "timeout" in err_str.lower():
-                        # 動態將該模型打入冷宮，避免後續請求再次被它拖垮
-                        penalize_model(model_name, duration=1800)
+                        # 動態將該模型打入冷宮 60 秒 (吻合 TPM 1 分鐘重置窗口)，避免後續請求再次被它拖垮
+                        penalize_model(model_name, duration=60)
                         # 若當前 Key 還有其他備用模型，優先嘗試下一個在線模型 (例如 70B 受限換 8B)
                         if idx < len(models_to_try) - 1:
                             print(f"🔄 模型 {model_name} 觸發速率限制，立刻切換至下一個在線模型...")
