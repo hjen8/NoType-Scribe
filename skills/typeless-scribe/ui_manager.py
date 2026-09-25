@@ -874,11 +874,11 @@ class UIManager:
         self.dictionary_win.configure(bg=self.BG_DARK)
         self.dictionary_win.attributes("-topmost", True)
         
-        w, h = 540, 620
+        w, h = 750, 640
         sw = self.dictionary_win.winfo_screenwidth()
         sh = self.dictionary_win.winfo_screenheight()
         self.dictionary_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        self.dictionary_win.minsize(460, 480)
+        self.dictionary_win.minsize(700, 500)
         
         def on_close():
             if self.dictionary_win:
@@ -1157,7 +1157,7 @@ class UIManager:
             edit_win.title("修改專屬詞彙")
             edit_win.configure(bg=self.BG_DARK)
             edit_win.attributes("-topmost", True)
-            w, h = 420, 200
+            w, h = 480, 220
             sw = edit_win.winfo_screenwidth()
             sh = edit_win.winfo_screenheight()
             edit_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
