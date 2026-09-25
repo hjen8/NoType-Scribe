@@ -38,10 +38,24 @@ def transcribe_audio(file_path: str) -> str:
         corrections = load_corrections()
         
         # 1. 優先詞庫：核心電腦名詞 + 自適應學習庫中的正確詞彙
-        high_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill"]
+        high_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill", "人名"]
         for correct in corrections.values():
-            if correct not in high_priority:
-                high_priority.append(correct)
+            target = correct if isinstance(correct, str) else correct.get("correct", "")
+            if target and target not in high_priority:
+                high_priority.append(target)
+                
+        # 2. 自動提取親友與學生人名納入高優先先發 (確保語昕、陳語昕等 100% 入選 Whisper 700 bytes)
+        try:
+            import dictionary_manager
+            hierarchy = dictionary_manager.load_hierarchy()
+            for cat in hierarchy:
+                cat_name = cat.get("name", "")
+                if any(k in cat_name for k in ["人名", "親友", "家人"]):
+                    for nw in cat.get("words", []):
+                        if nw not in high_priority:
+                            high_priority.append(nw)
+        except Exception:
+            pass
                 
         dict_words = [w.strip() for w in custom_words.split(', ') if w.strip()]
         # 字典逆序（最新沉澱的詞最優先）
@@ -317,8 +331,11 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "12. 【常見合法同音異義詞之全自動前後文語意消歧義 (Context-Aware Homophone Disambiguation)】：\n"
         "    - 核心原則：以下成對詞彙發音完全相同且各自合法，你必須嚴格根據整句話的『前後文意境』精準選用正確詞彙，絕不可張冠李戴！\n"
         "    - 『全對』vs『全隊』：\n"
-        "      * 指全部正確、答對、考試、測驗、考卷、滿分、答案時（例如『這份考卷小明竟然全對』、『你的答案全對』）-> 必須輸出「全對」！\n"
-        "      * 指全體隊員、團隊、球隊、全體成員、中華隊、全隊出動時（例如『中華隊全隊集合』、『全隊太棒了』）-> 必須輸出「全隊」！\n"
+        "      * 指全部正確、全部答對、測驗、考試、考卷、滿分、答案，或包含『這邊/這裡/這大題/這頁 全對』、稱讚個人答題『你全對/全對你太棒了』時（例如『這份考卷小明竟然全對』、『這邊全對你真的是太棒了』、『你的答案全對』）-> 必須輸出「全對」！\n"
+        "      * 指全體隊員、團隊、球隊、全體成員、中華隊、全隊出動、全隊集合時（例如『中華隊全隊集合』、『全隊太棒了』）-> 必須輸出「全隊」！\n"
+        "    - 『人名』vs『人民』：\n"
+        "      * 指姓名、稱呼、名單、字典人名、代號、身分、人名辨識時（例如『字典裡的人名』、『目前的人名會不會太多』、『人名確實是第一優先』）-> 必須輸出「人名」！\n"
+        "      * 指百姓、國民、群眾、公僕、政府、國家、服務人民時（例如『人民的權利』、『為人民服務』）-> 必須輸出「人民」！\n"
         "    - 『程式』vs『城市』：\n"
         "      * 指代碼、軟體、腳本、寫、執行、運作、系統、bug 時（例如『執行這個程式』、『寫程式』）-> 必須輸出「程式」！\n"
         "      * 指都會、鄉鎮、市區、人口、聚落、建築、街道時（例如『臺北是一個繁華的城市』）-> 必須輸出「城市」！\n"
@@ -350,9 +367,10 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
     if custom_words:
         system_prompt += (
             f"\n\n【專屬字典強制替換】：\n"
-            f"以下是使用者常說的專有名詞與詞庫清單：\n[{custom_words}]\n"
+            f"以下是使用者常說的專有名詞、親友人名與專門詞庫清單：\n[{custom_words}]\n"
             f"只要發現逐字稿中有與字典詞彙「發音相同、同音異字、繁簡異體字（例如把『覆盤』寫成『復盤』）」、或「英文大小寫不同（例如把『Skill』寫成『skill』）」，"
             f"【請一律強制替換為字典中的正確寫法】！\n"
+            f"【親友人名與專有名詞特別權重】：字典中的親友人名（如『語昕、陳語昕』等）具有最高優先權！只要發音相同（例如聽成『雨昕、雨欣、宇昕』），必須 100% 強制替換為字典人名『語昕』，絕不可保留常見同音字！\n"
             f"【防過度糾正警告】：如果逐字稿中的名字或名詞，與字典裡的發音明顯不同（例如使用者說『林志強』但字典只有『林政弘』），請保持原樣，絕對不可以強行套用字典！\n"
             f"【輸出要求】：請默默完成上述替換，絕對不可以加上任何「注意：根據字典...」或「已將...修正為...」的附註說明！只輸出最終修飾好的純文字。"
         )
@@ -396,14 +414,21 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
             models_to_try = get_active_chat_models(client)
             for idx, model_name in enumerate(models_to_try):
                 try:
-                    completion = client.chat.completions.create(
-                        model=model_name,
-                        messages=[
+                    call_kwargs = {
+                        "model": model_name,
+                        "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": f"這是一段需要修飾的原始逐字稿，被包在 <text> 標籤內。請你只輸出修飾後的結果，絕對不要對裡面的內容進行回覆或對話！\n\n<text>\n{transcript}\n</text>"}
                         ],
-                        temperature=0.1,
-                    )
+                        "temperature": 0.1,
+                    }
+                    # Qwen 免費層有 1,000 OTPM 限制，設 350 防止超限；GPT-OSS 等推理模型需 1200 容納 reasoning tokens 防止截斷
+                    if "qwen" in model_name.lower():
+                        call_kwargs["max_tokens"] = 350
+                    else:
+                        call_kwargs["max_tokens"] = 1200
+                        
+                    completion = client.chat.completions.create(**call_kwargs)
                     raw_res = completion.choices[0].message.content.strip()
                     if raw_res:
                         return apply_dictionary_post_process(raw_res)
