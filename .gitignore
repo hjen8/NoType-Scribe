@@ -63,6 +63,7 @@ logs/
 *.bak
 *.tmp
 *.temp
+*.wav
 
 # Test artifacts
 .coverage
