@@ -1288,7 +1288,14 @@ class UIManager:
             bg="#8e44ad", fg="white", bd=0, padx=10, pady=5
         ).pack(side="left", padx=6)
         
-        # 3. 記事本開啟
+        # 3. 7 月學生名單檢核按鈕
+        tk.Button(
+            toolbar, text=" 🎓 7 月學生名單檢核 ", command=lambda: self.show_student_reminder_dialog(force=True),
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#d35400", fg="white", bd=0, padx=10, pady=5, cursor="hand2"
+        ).pack(side="left", padx=6)
+        
+        # 4. 記事本開啟
         def open_notepad():
             import subprocess
             subprocess.Popen(['notepad.exe', dictionary_manager.get_dictionary_path()])
@@ -1533,12 +1540,17 @@ class UIManager:
 
     def show_student_reminder_dialog(self, force=False):
         import config_manager
+        print(f"[UI] 觸發 7 月學生名單例行檢核 (force={force})", flush=True)
         if not force and not config_manager.should_prompt_student_reminder():
             return
             
         if hasattr(self, 'student_reminder_win') and self.student_reminder_win and self.student_reminder_win.winfo_exists():
-            self.student_reminder_win.lift()
-            self.student_reminder_win.focus_force()
+            try:
+                self.student_reminder_win.deiconify()
+                self.student_reminder_win.lift()
+                self.student_reminder_win.focus_force()
+            except Exception:
+                pass
             return
             
         dialog = tk.Toplevel(self.root)
@@ -1672,7 +1684,10 @@ class UIManager:
                 elif item == 'check_student_reminder':
                     self.show_student_reminder_dialog(force=False)
                 elif item == 'open_student_reminder':
-                    self.show_student_reminder_dialog(force=True)
+                    try:
+                        self.show_student_reminder_dialog(force=True)
+                    except Exception as e:
+                        print(f"[UI] Error opening student reminder dialog: {e}", flush=True)
                 elif item == 'import_dictionary':
                     self._prompt_import_dictionary()
                 elif item == 'export_dictionary':

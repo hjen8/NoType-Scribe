@@ -55,6 +55,7 @@ def on_export_dictionary(icon, item):
     ui.msg_queue.put('export_dictionary')
 
 def on_test_student_reminder(icon, item):
+    print("[Tray] 使用者點擊『🎓 測試 7 月學生名單提醒...』選單", flush=True)
     ui.msg_queue.put('open_student_reminder')
 
 def on_open_dictionary_notepad(icon, item):
