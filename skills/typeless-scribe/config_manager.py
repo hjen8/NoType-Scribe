@@ -127,8 +127,8 @@ def set_student_reminder_snooze(days: int = 7):
 def should_prompt_student_reminder(force_check_month: int = None) -> bool:
     today = datetime.date.today()
     month = today.month if force_check_month is None else force_check_month
-    # 每年 7 月 (臺灣暑期/新學年度交接期)
-    if month != 7:
+    # 每年 6 月 (學期末/新學年度交接期)
+    if month != 6:
         return False
     
     status = get_student_reminder_status()

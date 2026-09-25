@@ -23,6 +23,7 @@ import pystray
 from ui_manager import ui
 from keyboard_hook import KeyboardManager
 from backup_manager import restore_from_backup, sync_to_backup
+import config_manager
 
 # 自動災難復原防護：若本地缺少關鍵設定，從 Dropbox 鏡像還原；啟動時靜默鏡像備份
 restore_from_backup()
@@ -55,7 +56,7 @@ def on_export_dictionary(icon, item):
     ui.msg_queue.put('export_dictionary')
 
 def on_test_student_reminder(icon, item):
-    print("[Tray] 使用者點擊『🎓 測試 7 月學生名單提醒...』選單", flush=True)
+    print("[Tray] 使用者點擊『🎓 學生名單例行檢核 (6月)...』選單", flush=True)
     ui.msg_queue.put('open_student_reminder')
 
 def on_open_dictionary_notepad(icon, item):
@@ -109,7 +110,11 @@ def run_tray():
                 pystray.MenuItem('📤 匯出字典 (Export)...', on_export_dictionary),
                 pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
             )),
-            pystray.MenuItem('🎓 測試 7 月學生名單提醒...', on_test_student_reminder),
+            pystray.MenuItem(
+                '🎓 學生名單例行檢核 (6月)...', 
+                on_test_student_reminder,
+                visible=lambda item: config_manager.should_prompt_student_reminder()
+            ),
             pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
             pystray.MenuItem('📖 操作說明與快捷鍵 (README)', on_open_help),
             pystray.MenuItem('離開 (Quit)', on_quit),
@@ -148,7 +153,7 @@ def main():
     tray_thread = threading.Thread(target=run_tray, daemon=True)
     tray_thread.start()
 
-    # 每年 7 月新學年度學生名單提醒巡檢執行緒 (啟動後 2 秒與每 12 小時檢查)
+    # 每年 6 月新學年度學生名單提醒巡檢執行緒 (啟動後 2 秒與每 12 小時檢查)
     def _student_reminder_worker():
         import time
         time.sleep(2)

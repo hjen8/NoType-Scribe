@@ -68,7 +68,7 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
             pass
             
         # 2. 【第二順位先發】：核心電腦名詞、同音消歧義與自適應學習庫正確詞彙
-        core_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "SOP", "Skill", "人名", "全對", "霈沄", "語昕"]
+        core_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "主選單", "SOP", "Skill", "人名", "全對", "霈沄", "語昕"]
         for correct in corrections.values():
             target = correct if isinstance(correct, str) else correct.get("correct", "")
             if target and target not in core_priority and target not in name_priority:
@@ -299,6 +299,7 @@ def apply_dictionary_post_process(text: str) -> str:
     # 1.5 常見電腦操作語境同音字修正 (例如「這個城市能夠...」->「這個程式能夠...」)
     text = re.sub(r'這個城市(?=能夠|可以|會|跑|執行|運作|軟體)', '這個程式', text)
     text = re.sub(r'(寫|執行|重啟|啟動|常駐|關閉|我們的)城市', r'\1程式', text)
+    text = text.replace("竹選單", "主選單")
     
     # 2. 專屬英數字詞彙大小寫強制校正 (例如 skill -> Skill, sop -> SOP)
     for w in words:
@@ -371,8 +372,11 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "    - 「詞疊 / 磁疊 / 刺碟」-> 100% 強制修正為「磁碟」（特別在『S磁碟、C磁碟、磁碟機、檔案、目錄、RAMDISK』等電腦語境）。\n"
         "    - 「S疊 / S跌 / S蝶 / SDA」-> 100% 強制修正為「S碟」或「S磁碟」。\n"
         "    - 「城市」在軟體、執行、代碼、操作語境下（例如『希望我們這個程式能夠...』、『後台運行的程式』、『撰寫程式』）-> 必須強制修正為「程式」，絕非地理名詞『城市』！\n"
+        "    - 「竹選單」在軟體介面、右鍵、系統匣、功能表、操作語境下 -> 100% 強制修正為「主選單」，絕非竹子之「竹」！\n"
         "12. 【常見合法同音異義詞之全自動前後文語意消歧義 (Context-Aware Homophone Disambiguation)】：\n"
         "    - 核心原則：以下成對詞彙發音完全相同且各自合法，你必須嚴格根據整句話的『前後文意境』精準選用正確詞彙，絕不可張冠李戴！\n"
+        "    - 『主選單』vs『竹選單』：\n"
+        "      * 涉及軟體介面、右鍵、系統匣、功能表、操作、選項、按鈕時，100% 輸出「主選單」，絕不可輸出同音字「竹選單」！\n"
         "    - 『全對』vs『全隊』：\n"
         "      * 指全部正確、全部答對、測驗、考試、考卷、滿分、答案，或包含『這邊/這裡/這大題/這頁 全對』、稱讚個人答題『你全對/全對你太棒了』時（例如『這份考卷小明竟然全對』、『這邊全對你真的是太棒了』、『你的答案全對』）-> 必須輸出「全對」！\n"
         "      * 指全體隊員、團隊、球隊、全體成員、中華隊、全隊出動、全隊集合時（例如『中華隊全隊集合』、『全隊太棒了』）-> 必須輸出「全隊」！\n"

@@ -1288,9 +1288,9 @@ class UIManager:
             bg="#8e44ad", fg="white", bd=0, padx=10, pady=5
         ).pack(side="left", padx=6)
         
-        # 3. 7 月學生名單檢核按鈕
+        # 3. 6 月學生名單檢核按鈕
         tk.Button(
-            toolbar, text=" 🎓 7 月學生名單檢核 ", command=lambda: self.show_student_reminder_dialog(force=True),
+            toolbar, text=" 🎓 6 月學生名單檢核 ", command=lambda: self.show_student_reminder_dialog(force=True),
             font=("Microsoft JhengHei", 9, "bold"),
             bg="#d35400", fg="white", bd=0, padx=10, pady=5, cursor="hand2"
         ).pack(side="left", padx=6)
@@ -1540,7 +1540,7 @@ class UIManager:
 
     def show_student_reminder_dialog(self, force=False):
         import config_manager
-        print(f"[UI] 觸發 7 月學生名單例行檢核 (force={force})", flush=True)
+        print(f"[UI] 觸發 6 月學生名單例行檢核 (force={force})", flush=True)
         if not force and not config_manager.should_prompt_student_reminder():
             return
             
@@ -1554,7 +1554,7 @@ class UIManager:
             return
             
         dialog = tk.Toplevel(self.root)
-        dialog.title("NoType 7 月新學年度學生名單例行檢核")
+        dialog.title("NoType 6 月新學年度學生名單例行檢核")
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         self.student_reminder_win = dialog
@@ -1578,13 +1578,13 @@ class UIManager:
         header.pack(fill="x")
         
         tk.Label(
-            header, text="🎓 7 月新學年度學生名單例行檢核",
+            header, text="🎓 6 月新學年度學生名單例行檢核",
             font=("Microsoft JhengHei", 14, "bold"),
             fg="#f39c12", bg=self.BG_DARK
         ).pack(anchor="w")
         
         desc_text = (
-            "長官您好！現在是 7 月暑假與新學年度交接期，\n"
+            "長官您好！現在是 6 月學期末與新學年度交接期，\n"
             "考量舊生畢業離班與新生入學，是否需要檢視或更新專屬字典中的【學生人名】清單？\n\n"
             "★ 更新【學生人名】可確保新學年度語音輸入 100% 精準命中新生姓名，\n"
             "享有最高優先先發優勢與同音防錯保險！（同事與親友人名不受影響）"
@@ -1621,7 +1621,7 @@ class UIManager:
             config_manager.set_student_reminder_done()
             dialog.destroy()
             self.student_reminder_win = None
-            self.toast("✅ 已確認完成！今年 7 月不再跳窗提醒。", is_error=False, duration=3000)
+            self.toast("✅ 已確認完成！今年 6 月不再跳窗提醒。", is_error=False, duration=3000)
             
         btn_open = tk.Button(
             btn_frame, text=" 📚 立即開啟字典 (自動聚焦學生人名) ",
