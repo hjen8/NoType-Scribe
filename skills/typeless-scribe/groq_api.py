@@ -44,10 +44,8 @@ def get_dictionary_words() -> str:
                 words.append(line)
     return ", ".join(words)
 
-def transcribe_audio(file_path: str) -> str:
+def transcribe_audio(file_path: str, return_meta: bool = False):
     keys = get_all_groq_keys()
-    if not keys:
-        raise ValueError("NEED_KEY: 缺少 GROQ_API_KEY，請設定金鑰。")
     
     custom_words = get_dictionary_words()
     prompt_text = "這是一段繁體中文逐字稿。"
@@ -104,46 +102,62 @@ def transcribe_audio(file_path: str) -> str:
             prompt_text = base_prefix
 
     last_err = None
-    # 嘗試所有可用的 Groq Keys
-    for _ in range(max(1, len(keys))):
-        client = get_client()
-        if not client:
-            break
-        try:
-            with open(file_path, "rb") as file:
-                transcription = client.audio.transcriptions.create(
-                    file=(os.path.basename(file_path), file.read()),
-                    model="whisper-large-v3",
-                    prompt=prompt_text,
-                    response_format="text",
-                    language="zh"
-                )
-            return transcription
-        except Exception as e:
-            err_str = str(e)
-            last_err = e
-            # 若為 Prompt 過長或無效 Prompt 錯誤 (HTTP 400 invalid_prompt)，立即以極簡 Prompt 自動降級重試，絕不中斷辨識
-            if "prompt" in err_str.lower() or "400" in err_str:
-                print(f"[STT] Detected prompt issue ({err_str[:60]}), falling back to minimal prompt...")
-                try:
-                    with open(file_path, "rb") as file:
-                        return client.audio.transcriptions.create(
-                            file=(os.path.basename(file_path), file.read()),
-                            model="whisper-large-v3",
-                            prompt="這是一段繁體中文逐字稿。",
-                            response_format="text",
-                            language="zh"
-                        )
-                except Exception as fallback_err:
-                    last_err = fallback_err
-                    print(f"[STT] Minimal prompt fallback failed: {fallback_err}")
-            
-            print(f"[STT] Failed ({err_str[:40]}...), rotating key...")
-            if len(keys) > 1:
-                rotate_groq_key()
-            else:
+    # 1. 嘗試雲端 Groq Whisper
+    if keys:
+        for _ in range(max(1, len(keys))):
+            client = get_client()
+            if not client:
                 break
+            try:
+                with open(file_path, "rb") as file:
+                    transcription = client.audio.transcriptions.create(
+                        file=(os.path.basename(file_path), file.read()),
+                        model="whisper-large-v3",
+                        prompt=prompt_text,
+                        response_format="text",
+                        language="zh"
+                    )
+                return (transcription, False) if return_meta else transcription
+            except Exception as e:
+                err_str = str(e)
+                last_err = e
+                # 若為 Prompt 過長或無效 Prompt 錯誤 (HTTP 400 invalid_prompt)，立即以極簡 Prompt 自動降級重試，絕不中斷辨識
+                if "prompt" in err_str.lower() or "400" in err_str:
+                    safe_print(f"[STT] Detected prompt issue ({err_str[:60]}), falling back to minimal prompt...")
+                    try:
+                        with open(file_path, "rb") as file:
+                            transcription = client.audio.transcriptions.create(
+                                file=(os.path.basename(file_path), file.read()),
+                                model="whisper-large-v3",
+                                prompt="這是一段繁體中文逐字稿。",
+                                response_format="text",
+                                language="zh"
+                            )
+                        return (transcription, False) if return_meta else transcription
+                    except Exception as fallback_err:
+                        last_err = fallback_err
+                        safe_print(f"[STT] Minimal prompt fallback failed: {fallback_err}")
                 
+                safe_print(f"[STT] Failed ({err_str[:40]}...), rotating key...")
+                if len(keys) > 1:
+                    rotate_groq_key()
+                else:
+                    break
+
+    # 2. 雲端失敗或無網路時，觸發地端 Faster-Whisper 極限備援 (Local Faster-Whisper Fallback)
+    safe_print(f"[STT Fallback] ⚠️ 雲端語音辨識不可用 ({last_err or '無有效 API Key'})，無縫啟動地端 Faster-Whisper 備援...")
+    try:
+        from local_transcribe import local_transcriber
+        local_text = local_transcriber.transcribe(file_path, prompt=prompt_text)
+        if local_text and local_text.strip():
+            safe_print("[STT Fallback] ✅ 地端語音辨識成功！")
+            return (local_text, True) if return_meta else local_text
+    except Exception as local_err:
+        safe_print(f"[STT Fallback] 地端語音辨識亦發生異常: {local_err}")
+
+    # 若地端亦失敗，再拋出詳細異常
+    if not keys:
+        raise ValueError("NEED_KEY: 缺少 GROQ_API_KEY，且地端備援未能處理。")
     err_msg = str(last_err)
     if "401" in err_msg or "invalid_api_key" in err_msg:
         raise ValueError("NEED_KEY: Groq API Key 無效，請檢查設定。")
