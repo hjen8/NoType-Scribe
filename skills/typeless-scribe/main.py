@@ -104,6 +104,7 @@ def run_tray():
                 pystray.MenuItem('📥 匯入字典 (Import)...', on_import_dictionary),
                 pystray.MenuItem('📤 匯出字典 (Export)...', on_export_dictionary),
                 pystray.MenuItem('📝 記事本直接編輯', on_open_dictionary_notepad),
+                pystray.MenuItem('🎓 測試 7 月學生名單提醒...', lambda icon, item: ui.msg_queue.put('open_student_reminder')),
             )),
             pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
             pystray.MenuItem('📖 操作說明與快捷鍵 (README)', on_open_help),
@@ -142,6 +143,17 @@ def main():
     # 在背景執行緒啟動系統匣
     tray_thread = threading.Thread(target=run_tray, daemon=True)
     tray_thread.start()
+
+    # 每年 7 月新學年度學生名單提醒巡檢執行緒 (啟動後 2 秒與每 12 小時檢查)
+    def _student_reminder_worker():
+        import time
+        time.sleep(2)
+        ui.msg_queue.put('check_student_reminder')
+        while True:
+            time.sleep(3600 * 12)
+            ui.msg_queue.put('check_student_reminder')
+
+    threading.Thread(target=_student_reminder_worker, daemon=True).start()
 
     # 啟動 Tkinter 訊息迴圈 (必須位於主執行緒)
     ui.start()

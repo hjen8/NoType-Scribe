@@ -60,7 +60,7 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
             hierarchy = dictionary_manager.load_hierarchy()
             for cat in hierarchy:
                 cat_name = cat.get("name", "")
-                if any(k in cat_name for k in ["人名", "親友", "家人"]):
+                if any(k in cat_name for k in ["人名", "親友", "家人", "學生"]):
                     for nw in cat.get("words", []):
                         if nw not in name_priority:
                             name_priority.append(nw)
@@ -377,7 +377,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "      * 指全部正確、全部答對、測驗、考試、考卷、滿分、答案，或包含『這邊/這裡/這大題/這頁 全對』、稱讚個人答題『你全對/全對你太棒了』時（例如『這份考卷小明竟然全對』、『這邊全對你真的是太棒了』、『你的答案全對』）-> 必須輸出「全對」！\n"
         "      * 指全體隊員、團隊、球隊、全體成員、中華隊、全隊出動、全隊集合時（例如『中華隊全隊集合』、『全隊太棒了』）-> 必須輸出「全隊」！\n"
         "    - 『人名』vs『人民』：\n"
-        "      * 指姓名、稱呼、名單、字典人名、代號、身分、人名辨識時（例如『字典裡的人名』、『目前的人名會不會太多』、『人名確實是第一優先』）-> 必須輸出「人名」！\n"
+        "      * 指姓名、稱呼、名單、清單、字典人名、更新、其他部分的人名、這一段的人名、學生人名、同事人名、代號、身分、人名辨識時（例如『其他部分的人名應該不太會動』、『這一段的人名』、『字典裡的人名』、『目前的人名會不會太多』、『人名確實是第一優先』）-> 必須輸出「人名」！\n"
         "      * 指百姓、國民、群眾、公僕、政府、國家、服務人民時（例如『人民的權利』、『為人民服務』）-> 必須輸出「人民」！\n"
         "    - 『程式』vs『城市』：\n"
         "      * 指代碼、軟體、腳本、寫、執行、運作、系統、bug 時（例如『執行這個程式』、『寫程式』）-> 必須輸出「程式」！\n"
@@ -415,7 +415,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         for cat in hierarchy:
             cat_name = cat.get("name", "")
             words = cat.get("words", [])
-            if any(k in cat_name for k in ["人名", "親友", "家人"]):
+            if any(k in cat_name for k in ["人名", "親友", "家人", "學生"]):
                 for w in words:
                     if w not in name_words:
                         name_words.append(w)

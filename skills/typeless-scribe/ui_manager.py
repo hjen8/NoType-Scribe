@@ -15,6 +15,7 @@ class UIManager:
         self.history_win = None
         self.dictionary_win = None
         self.help_win = None
+        self.student_reminder_win = None
         self.toast_wins = []
 
     def show_toast(self, text, bg="#c0392b", duration=3500):
@@ -857,13 +858,15 @@ class UIManager:
     # =====================================================
     #  專屬字典管理面板 (Dictionary Manager & Import/Export)
     # =====================================================
-    def open_dictionary(self):
+    def open_dictionary(self, focus_category=None):
         import dictionary_manager
         
         if self.dictionary_win and self.dictionary_win.winfo_exists():
             self.dictionary_win.lift()
             self.dictionary_win.focus_force()
             self._refresh_dictionary_list()
+            if focus_category:
+                self._focus_dictionary_category(focus_category)
             return
             
         self.dictionary_win = tk.Toplevel(self.root)
@@ -1299,6 +1302,25 @@ class UIManager:
         # 綁定即時搜尋過濾
         self._dict_search_var.trace_add("write", lambda *args: self._filter_dictionary_list())
         self._refresh_dictionary_list()
+        if focus_category:
+            self._focus_dictionary_category(focus_category)
+
+    def _focus_dictionary_category(self, category_name):
+        if not hasattr(self, '_dict_tree') or not self._dict_tree:
+            return
+        cat_id = f"cat_l1_{category_name}"
+        if self._dict_tree.exists(cat_id):
+            self._dict_tree.item(cat_id, open=True)
+            self._dict_tree.selection_set(cat_id)
+            self._dict_tree.see(cat_id)
+            self._dict_tree.focus(cat_id)
+        if hasattr(self, '_dict_cat_var') and hasattr(self, '_dict_cat_menu') and self._dict_cat_menu:
+            try:
+                cat_list = self._dict_cat_menu.cget('values')
+                if category_name in cat_list:
+                    self._dict_cat_var.set(category_name)
+            except Exception:
+                pass
 
     def _refresh_dictionary_list(self):
         import dictionary_manager
@@ -1509,6 +1531,116 @@ class UIManager:
         except Exception as e:
             self.toast(f"⚠️ 匯出失敗: {e}", is_error=True, duration=4000)
 
+    def show_student_reminder_dialog(self, force=False):
+        import config_manager
+        if not force and not config_manager.should_prompt_student_reminder():
+            return
+            
+        if hasattr(self, 'student_reminder_win') and self.student_reminder_win and self.student_reminder_win.winfo_exists():
+            self.student_reminder_win.lift()
+            self.student_reminder_win.focus_force()
+            return
+            
+        dialog = tk.Toplevel(self.root)
+        dialog.title("NoType 7 月新學年度學生名單例行檢核")
+        dialog.configure(bg=self.BG_DARK)
+        dialog.attributes("-topmost", True)
+        self.student_reminder_win = dialog
+        
+        w, h = 530, 360
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        dialog.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        dialog.resizable(False, False)
+        
+        def on_close():
+            # 關閉視窗預設設為 7 天後再提醒
+            config_manager.set_student_reminder_snooze(7)
+            dialog.destroy()
+            self.student_reminder_win = None
+            
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # --- 頂部圖示與標題 ---
+        header = tk.Frame(dialog, bg=self.BG_DARK, padx=20, pady=16)
+        header.pack(fill="x")
+        
+        tk.Label(
+            header, text="🎓 7 月新學年度學生名單例行檢核",
+            font=("Microsoft JhengHei", 14, "bold"),
+            fg="#f39c12", bg=self.BG_DARK
+        ).pack(anchor="w")
+        
+        desc_text = (
+            "長官您好！現在是 7 月暑假與新學年度交接期，考量舊生畢業離班與新生入學，"
+            "是否需要檢視或更新專屬字典中的【學生人名】清單？\n\n"
+            "★ 更新【學生人名】可確保新學年度語音輸入 100% 精準命中新生姓名，"
+            "享有最高優先先發優勢與同音防錯保險！（同事與親友人名不受影響）"
+        )
+        
+        body = tk.Frame(dialog, bg=self.BG_DARK, padx=20)
+        body.pack(fill="both", expand=True)
+        
+        tk.Label(
+            body, text=desc_text,
+            font=("Microsoft JhengHei", 10),
+            fg=self.FG_TEXT, bg=self.BG_DARK,
+            justify="left", wraplength=490
+        ).pack(anchor="w", pady=(0, 15))
+        
+        # --- 操作選項按鈕區 ---
+        btn_frame = tk.Frame(dialog, bg=self.BG_DARK, padx=20, pady=15)
+        btn_frame.pack(fill="x")
+        
+        def action_open_dict():
+            config_manager.set_student_reminder_done()
+            dialog.destroy()
+            self.student_reminder_win = None
+            self.open_dictionary(focus_category="學生人名")
+            self.toast("📚 已開啟字典並自動為您聚焦【學生人名】分類！", is_error=False, duration=3500)
+            
+        def action_snooze():
+            config_manager.set_student_reminder_snooze(7)
+            dialog.destroy()
+            self.student_reminder_win = None
+            self.toast("⏳ 已設定 7 天後再次溫和提醒！", is_error=False, duration=2500)
+            
+        def action_dismiss():
+            config_manager.set_student_reminder_done()
+            dialog.destroy()
+            self.student_reminder_win = None
+            self.toast("✅ 已確認完成！今年 7 月不再跳窗提醒。", is_error=False, duration=3000)
+            
+        btn_open = tk.Button(
+            btn_frame, text=" 📚 立即開啟字典 (自動聚焦學生人名) ",
+            command=action_open_dict,
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#2980b9", fg="white", activebackground="#3498db", activeforeground="white",
+            bd=0, padx=12, pady=8, cursor="hand2"
+        )
+        btn_open.pack(fill="x", pady=3)
+        
+        row_opts = tk.Frame(btn_frame, bg=self.BG_DARK)
+        row_opts.pack(fill="x", pady=(6, 0))
+        
+        btn_snooze = tk.Button(
+            row_opts, text=" ⏳ 7 天後再提醒 ",
+            command=action_snooze,
+            font=("Microsoft JhengHei", 9),
+            bg="#d35400", fg="white", activebackground="#e67e22", activeforeground="white",
+            bd=0, padx=8, pady=5, cursor="hand2"
+        )
+        btn_snooze.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        
+        btn_done = tk.Button(
+            row_opts, text=" ✅ 今年名單已確認 (今年不再提醒) ",
+            command=action_dismiss,
+            font=("Microsoft JhengHei", 9),
+            bg="#27ae60", fg="white", activebackground="#2ecc71", activeforeground="white",
+            bd=0, padx=8, pady=5, cursor="hand2"
+        )
+        btn_done.pack(side="right", fill="x", expand=True, padx=(4, 0))
+
     def process_queue(self):
         try:
             while True:
@@ -1519,6 +1651,9 @@ class UIManager:
                 elif isinstance(item, tuple) and item[0] == 'open_quick_learn':
                     _, wrong_text, callback = item
                     self.open_quick_learn(wrong_text, callback)
+                elif isinstance(item, tuple) and item[0] == 'open_dictionary':
+                    _, cat = item
+                    self.open_dictionary(focus_category=cat)
                 elif item == 'show_floating':
                     self.show_floating()
                 elif item == 'hide_floating':
@@ -1531,6 +1666,10 @@ class UIManager:
                     self.open_history()
                 elif item == 'open_dictionary':
                     self.open_dictionary()
+                elif item == 'check_student_reminder':
+                    self.show_student_reminder_dialog(force=False)
+                elif item == 'open_student_reminder':
+                    self.show_student_reminder_dialog(force=True)
                 elif item == 'import_dictionary':
                     self._prompt_import_dictionary()
                 elif item == 'export_dictionary':

@@ -89,3 +89,62 @@ def set_gemini_api_key(api_key):
     config = load_config()
     config["GEMINI_API_KEY"] = api_key
     save_config(config)
+
+import datetime
+
+def get_student_reminder_status() -> dict:
+    config = load_config()
+    reminder = config.get("STUDENT_REMINDER", {})
+    if not isinstance(reminder, dict):
+        reminder = {}
+    return {
+        "last_reminded_year": reminder.get("last_reminded_year", 0),
+        "snoozed_until": reminder.get("snoozed_until", "")
+    }
+
+def set_student_reminder_done(year: int = None):
+    if year is None:
+        year = datetime.date.today().year
+    config = load_config()
+    reminder = config.get("STUDENT_REMINDER", {})
+    if not isinstance(reminder, dict):
+        reminder = {}
+    reminder["last_reminded_year"] = int(year)
+    reminder["snoozed_until"] = ""
+    config["STUDENT_REMINDER"] = reminder
+    save_config(config)
+
+def set_student_reminder_snooze(days: int = 7):
+    snooze_date = datetime.date.today() + datetime.timedelta(days=days)
+    config = load_config()
+    reminder = config.get("STUDENT_REMINDER", {})
+    if not isinstance(reminder, dict):
+        reminder = {}
+    reminder["snoozed_until"] = snooze_date.isoformat()
+    config["STUDENT_REMINDER"] = reminder
+    save_config(config)
+
+def should_prompt_student_reminder(force_check_month: int = None) -> bool:
+    today = datetime.date.today()
+    month = today.month if force_check_month is None else force_check_month
+    # 每年 7 月 (臺灣暑期/新學年度交接期)
+    if month != 7:
+        return False
+    
+    status = get_student_reminder_status()
+    # 如果今年已經確認過，不再提醒
+    if status["last_reminded_year"] >= today.year:
+        return False
+        
+    # 如果設定了稍後提醒 (Snooze)，檢查是否尚未到期
+    snooze_str = status.get("snoozed_until", "")
+    if snooze_str:
+        try:
+            snooze_date = datetime.date.fromisoformat(snooze_str)
+            if today < snooze_date:
+                return False
+        except Exception:
+            pass
+            
+    return True
+
