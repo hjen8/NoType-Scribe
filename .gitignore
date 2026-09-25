@@ -4,6 +4,7 @@
 venv/
 env/
 *.venv
+scratch/
 
 # Skill Data (NEVER commit - contains auth and personal notebooks!)
 data/

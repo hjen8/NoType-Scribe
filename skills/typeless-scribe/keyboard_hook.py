@@ -6,6 +6,7 @@ from ui_manager import ui
 from audio_logic import AudioRecorder
 from groq_api import transcribe_audio, generate_notes, safe_print
 from history_manager import HistoryRecord, add_record
+from power_monitor import PowerMonitor
 
 # 將所有可能的 Alt 鍵名稱統一列出，確保相容性
 ALT_KEYS = {keyboard.Key.alt_l, keyboard.Key.alt_r}
@@ -46,6 +47,16 @@ class KeyboardManager:
         self.listener = None
         self.target_hwnd = None
         self.app_context = None
+        self.power_monitor = PowerMonitor(on_resume=self._on_system_resume)
+
+    def _on_system_resume(self, reason: str):
+        safe_print(f"[Power] Audio stream reconnect triggered by {reason}...")
+        success = self.recorder.reset_audio_engine()
+        if success:
+            try:
+                ui.toast("⚡ 系統喚醒：音訊串流已全自動重連！", is_error=False, duration=2500)
+            except Exception as e:
+                safe_print(f"[Power] UI toast error: {e}")
 
     def _detect_app_context(self, hwnd) -> dict:
         import ctypes
@@ -460,8 +471,22 @@ class KeyboardManager:
             win32_event_filter=self._win32_filter
         )
         self.listener.start()
+        if hasattr(self, 'power_monitor') and self.power_monitor:
+            self.power_monitor.start()
         print("[Keyboard] Hotkey listener started:")
         print("  <右側 Alt>   : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
         print("  <F9>         : 備用語音輸入 (單擊切換錄音與貼上)")
         print("  <F8>         : 桌面反白文字重新修飾")
         print("  <Shift + F8> : 桌面反白文字極速糾錯教學與自適應學習")
+
+    def stop(self):
+        if hasattr(self, 'power_monitor') and self.power_monitor:
+            try:
+                self.power_monitor.stop()
+            except Exception:
+                pass
+        if hasattr(self, 'listener') and self.listener:
+            try:
+                self.listener.stop()
+            except Exception:
+                pass
