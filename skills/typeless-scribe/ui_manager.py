@@ -577,10 +577,16 @@ class UIManager:
         row2 = tk.Frame(dialog, bg=self.BG_DARK)
         row2.pack(fill="x", padx=20, pady=3)
         tk.Label(row2, text="正確的詞：", font=("Microsoft JhengHei", 9, "bold"), fg="#f39c12", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
-        correct_var = tk.StringVar()
+        correct_var = tk.StringVar(value=wrong_text if wrong_text else "")
         entry_correct = tk.Entry(row2, textvariable=correct_var, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
         entry_correct.pack(side="left", fill="x", expand=True)
         entry_correct.focus_set()
+        if wrong_text:
+            entry_correct.icursor(tk.END)
+            dialog.after(50, lambda: (entry_correct.focus_set(), entry_correct.icursor(tk.END)))
+        entry_correct.bind("<Control-a>", lambda e: (entry_correct.select_range(0, tk.END), "break")[1])
+        entry_wrong.bind("<Control-a>", lambda e: (entry_wrong.select_range(0, tk.END), "break")[1])
+
         
         # 自動歸類分類選單
         import dictionary_manager

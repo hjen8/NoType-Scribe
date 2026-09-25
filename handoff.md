@@ -1,15 +1,15 @@
 # 🚀 NoType 專案交接交球報告 (Handoff Report)
 
-- **交接日期**：2026-09-24 12:43
-- **交接對話流水號**：`[0417]` 圓滿收工，隨時可於新對話由 `[0001]` 乾淨起跑接棒
+- **交接日期**：2026-09-25 10:20
+- **交接對話流水號**：`[0418]` 圓滿收工，隨時可於新對話由 `[0001]` 乾淨起跑接棒
 - **專案實體目錄**：`E:\AI_Work\NoType`
 - **核心程式目錄**：`E:\AI_Work\NoType\skills\typeless-scribe`
 - **虛擬環境 Python**：`E:\AI_Work\NoType\skills\typeless-scribe\venv\Scripts\python.exe`
-- **NoType 常駐行程最新 PID**：`12668`（背景常駐正常服役中，雙軌自動備份啟用）
+- **NoType 常駐行程最新 PID**：`1904`（背景常駐正常服役中，雙軌自動備份啟用）
 - **Git 雙軌雲端狀態**：
-  - NoType 程式庫：`https://github.com/hjen8/NoType-Scribe.git`（最新 Commit `da6e0be`，已 100% Push）
-  - Obsidian 知識庫：`https://github.com/hjen8/brain-obsidian-vault.git`（最新 Commit `e190457`，已 100% Push）
-- **Dropbox 鏡像備份庫**：`D:\Dropbox\Brain\NoType_Backup\`（金鑰、342 筆字典、安裝器與手冊物理同步）
+  - NoType 程式庫：`https://github.com/hjen8/NoType-Scribe.git`（最新 Push 保持中）
+  - Obsidian 知識庫：`https://github.com/hjen8/brain-obsidian-vault.git`（最新 Push 保持中）
+- **Dropbox 鏡像備份庫**：`D:\Dropbox\Brain\NoType_Backup\`（金鑰、345 筆字典、安裝器與手冊物理同步）
 
 ---
 
@@ -54,8 +54,15 @@
   - 涵蓋全域熱鍵、樹狀字典、語音技法、歷史面板、災難復原完整教學。
 - **Dropbox 根目錄零摩擦極速安裝器 (`INSTALL_FROM_DROPBOX.bat`)**：
   - 在 Dropbox 備份目錄直接雙擊執行，自動下載/克隆代碼、建環境、灌入金鑰與字典、放好桌面捷徑並啟動！
-- **確立「每次專案變更強制同步 Dropbox 鏡像鐵律」**：
-  - 沉澱至全域 Skill `notype-adaptive-scribe` (Rule 17-5)。
+### 5. Task 23：Shift+F8 極速糾錯人因預填、光標末尾定位與數學專科特徵擴充
+- **聽錯文字自動預填**：
+  - 反白選取文字按 `Shift + F8`，下半格「正確的詞」預設自動填入聽錯的文字，無需重打整句。
+- **光標強制定位最末尾 (`icursor(tk.END)`)**：
+  - 彈窗時文字焦點與光標自動置於最後方，按一下 `Backspace` 即可秒修最後一個錯字（如 `多項是` ➔ 倒退鍵 ➔ `式` ➔ `Shift+Enter` 秒存）。
+- **全選快捷鍵相容 (`Ctrl + A`)**：
+  - 兼顧單字微調與整句重打雙重人因場景。
+- **數學專科特徵庫規則擴充**：
+  - 擴充 `多項式`、`項式`、`項是`、`係數`、`因式`、`餘式`、`斜率`、`坐標`、`數列`、`級數`、`機率` 等 30+ 關鍵詞，智慧分類 100% 精準命中「數學與學術名詞」。
 
 ---
 
