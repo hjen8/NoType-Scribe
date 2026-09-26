@@ -302,11 +302,17 @@ def apply_dictionary_post_process(text: str) -> str:
         "賬號": "帳號",
         "記賬": "記帳",
         "結賬": "結帳",
-        "查賬": "查帳",
+        "字本": "治本",
+        "字標": "治標",
+        "此對": "詞對",
+        "詞隊": "詞對",
         "常住程式": "常駐程式",
     }
     for mainland, tw in taiwan_lexicon.items():
         text = text.replace(mainland, tw)
+    # 數字量詞同音口誤微整與中英數排版 (例如 2字本 -> 2 治本、1字標 -> 1 治標)
+    text = re.sub(r'(\d+)\s*(?:字本|治本)', r'\1 治本', text)
+    text = re.sub(r'(\d+)\s*(?:字標|治標)', r'\1 治標', text)
     # 防重複前綴替換 (避免將已轉為「演算法」的詞再度替換為「演演算法」)
     text = re.sub(r'(?<!演)算法', '演算法', text)
     
