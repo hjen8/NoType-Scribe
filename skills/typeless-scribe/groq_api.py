@@ -307,6 +307,14 @@ def apply_dictionary_post_process(text: str) -> str:
         "此對": "詞對",
         "詞隊": "詞對",
         "常住程式": "常駐程式",
+        "站高一段落": "暫告一段落",
+        "站告一段落": "暫告一段落",
+        "站告": "暫告",
+        "代辦事項": "待辦事項",
+        "代辦清單": "待辦清單",
+        "代辦工作": "待辦工作",
+        "代辦任務": "待辦任務",
+        "代辦日程": "待辦日程",
     }
     for mainland, tw in taiwan_lexicon.items():
         text = text.replace(mainland, tw)
