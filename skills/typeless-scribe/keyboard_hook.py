@@ -246,7 +246,7 @@ class KeyboardManager:
                 daemon=True
             ).start()
 
-    def process_audio_thread(self, file_path, duration_sec, app_context=None, target_hwnd=None):
+    def process_audio_thread(self, file_path, duration_sec, app_context=None, target_hwnd=None, ambient_context=""):
         record = HistoryRecord(
             duration_sec=duration_sec,
             audio_path=file_path
@@ -274,24 +274,24 @@ class KeyboardManager:
                 ui.toast("📡 離線備援：已使用地端語音辨識！", is_error=False, duration=3000)
                 from learning_manager import apply_corrections
                 from groq_api import apply_dictionary_post_process
-                refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip()))
+                refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip(), ambient_context=ambient_context), ambient_context=ambient_context)
                 record.error_msg = "(地端離線備援)"
             else:
                 app_mode = app_context.get('mode', 'general') if app_context else 'general'
                 app_name = app_context.get('name', 'App') if app_context else 'App'
-                safe_print(f"[LLM] Starting refinement with App Mode: '{app_mode}' ({app_name})...")
+                safe_print(f"[LLM] Starting refinement with App Mode: '{app_mode}' ({app_name}) | Ambient: {len(ambient_context)} chars...")
                 start = time.time()
                 
                 def notify_switch(msg):
                     ui.toast(msg, is_error=False, duration=3500)
                     
                 try:
-                    refined_text = generate_notes(transcript, on_model_switch=notify_switch, app_mode=app_mode)
+                    refined_text = generate_notes(transcript, on_model_switch=notify_switch, app_mode=app_mode, ambient_context=ambient_context)
                 except Exception as llm_err:
                     safe_print(f"[LLM Fallback] ⚠️ LLM 服務異常 ({llm_err})，自動降級使用原始逐字稿並套用糾錯字典！")
                     from learning_manager import apply_corrections
                     from groq_api import apply_dictionary_post_process
-                    refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip()))
+                    refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip(), ambient_context=ambient_context), ambient_context=ambient_context)
                     
                 safe_print(f"[LLM] Done ({time.time()-start:.1f}s): {refined_text}")
             
@@ -381,6 +381,21 @@ class KeyboardManager:
         import ctypes
         self.target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         self.app_context = self._detect_app_context(self.target_hwnd)
+        self.ambient_context = ""
+        
+        # 啟動非同步嗅探線程探測當前前景焦點視窗語境 (0 延遲，不阻塞錄音啟動)
+        def _sniff(hwnd):
+            try:
+                from screen_context import get_foreground_window_text
+                text = get_foreground_window_text(hwnd)
+                if text:
+                    self.ambient_context = text
+                    safe_print(f"[Ambient] 畫面語境嗅探完成 ({len(text)} 字元)")
+            except Exception as e:
+                safe_print(f"[Ambient Sniff Error] {e}")
+                
+        threading.Thread(target=_sniff, args=(self.target_hwnd,), daemon=True).start()
+        
         print(f"\n[REC] Recording started... (Active App: {self.app_context['name']} | Mode: {self.app_context['mode']})")
         ui.msg_queue.put('show_floating')
         self.recorder.start_recording()
@@ -396,7 +411,7 @@ class KeyboardManager:
         if file_path:
             threading.Thread(
                 target=self.process_audio_thread,
-                args=(file_path, duration_sec, self.app_context, self.target_hwnd),
+                args=(file_path, duration_sec, self.app_context, self.target_hwnd, self.ambient_context),
                 daemon=True
             ).start()
 

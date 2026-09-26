@@ -91,11 +91,11 @@ def add_correction(wrong_text: str, correct_text: str, category: str = None, con
         print(f"[Learning] Error adding to dictionary: {e}")
         append_to_dictionary(correct_text)
 
-def apply_corrections(text: str) -> str:
+def apply_corrections(text: str, ambient_context: str = "") -> str:
     """
     套用所有已學習的糾錯記憶至文字中
     - 導入子句級作用域隔離 (Clause-Level Scope)：以標點符號進行斷句切片，各子句獨立比對，徹底杜絕跨子句污染誤傷
-    - 支援長詞優先、正向語境 (contexts) 與負向排除語境 (negative_contexts)
+    - 支援長詞優先、正向語境 (contexts)、負向排除語境 (negative_contexts) 與畫面環境語境融合 (ambient_context)
     """
     if not text:
         return text
@@ -130,9 +130,12 @@ def apply_corrections(text: str) -> str:
                 
                 # 必須在同一子句中包含目標詞
                 if wrong in clause:
-                    # 檢查正向關鍵字 (若有定義則必須命中其一)
-                    hit_pos = any(ctx in clause for ctx in pos_ctx) if pos_ctx else True
-                    # 檢查負向排除關鍵字 (若命中任一則放棄替換，避免互殺)
+                    # 檢查正向關鍵字：口述子句包含 或 當前螢幕焦點畫面包含 (雙軌融合)
+                    hit_pos_clause = any(ctx in clause for ctx in pos_ctx) if pos_ctx else True
+                    hit_pos_ambient = any(ctx in ambient_context for ctx in pos_ctx) if (ambient_context and pos_ctx) else False
+                    hit_pos = hit_pos_clause or hit_pos_ambient
+                    
+                    # 檢查負向排除關鍵字 (若口述子句命中任一負向詞則放棄替換，避免互殺)
                     hit_neg = any(n_ctx in clause for n_ctx in neg_ctx) if neg_ctx else False
                     
                     if hit_pos and not hit_neg:
