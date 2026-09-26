@@ -92,7 +92,11 @@ def add_correction(wrong_text: str, correct_text: str, category: str = None, con
         append_to_dictionary(correct_text)
 
 def apply_corrections(text: str) -> str:
-    """套用所有已學習的糾錯記憶至文字中 (支援短語優先與語境條件規則)"""
+    """
+    套用所有已學習的糾錯記憶至文字中
+    - 導入子句級作用域隔離 (Clause-Level Scope)：以標點符號進行斷句切片，各子句獨立比對，徹底杜絕跨子句污染誤傷
+    - 支援長詞優先、正向語境 (contexts) 與負向排除語境 (negative_contexts)
+    """
     if not text:
         return text
         
@@ -100,21 +104,45 @@ def apply_corrections(text: str) -> str:
     if not corrections:
         return text
         
-    # 依長度降序排序，長詞/短語優先匹配替換
+    # 依長度降序排序，長詞/短語優先匹配替換 (Longer Words First)
     sorted_pairs = sorted(corrections.items(), key=lambda x: len(x[0]), reverse=True)
     
-    for wrong, rule in sorted_pairs:
-        if isinstance(rule, dict):
-            target_correct = rule.get("correct", "")
-            ctx_list = rule.get("contexts", [])
-            # 僅在句子包含任一語境關鍵字時才替換
-            if wrong in text and any(ctx in text for ctx in ctx_list):
-                text = text.replace(wrong, target_correct)
-        else:
-            if wrong in text:
-                text = text.replace(wrong, str(rule))
+    # 子句級作用域隔離：使用常見標點符號與斷行進行子句切片
+    # 使用捕獲組保留所有標點符號與換行空白，確保重建後 100% 還原原始排版
+    clause_delimiters = r'([，。；！？、\n\r\t：,;:!?])'
+    tokens = re.split(clause_delimiters, text)
+    
+    processed_tokens = []
+    for token in tokens:
+        if not token:
+            continue
+        # 若為分隔標點符號或純換行，直接原樣保留
+        if re.fullmatch(clause_delimiters, token):
+            processed_tokens.append(token)
+            continue
+            
+        clause = token
+        for wrong, rule in sorted_pairs:
+            if isinstance(rule, dict):
+                target_correct = rule.get("correct", "")
+                pos_ctx = rule.get("contexts", [])
+                neg_ctx = rule.get("negative_contexts", [])
                 
-    return text
+                # 必須在同一子句中包含目標詞
+                if wrong in clause:
+                    # 檢查正向關鍵字 (若有定義則必須命中其一)
+                    hit_pos = any(ctx in clause for ctx in pos_ctx) if pos_ctx else True
+                    # 檢查負向排除關鍵字 (若命中任一則放棄替換，避免互殺)
+                    hit_neg = any(n_ctx in clause for n_ctx in neg_ctx) if neg_ctx else False
+                    
+                    if hit_pos and not hit_neg:
+                        clause = clause.replace(wrong, target_correct)
+            else:
+                if wrong in clause:
+                    clause = clause.replace(wrong, str(rule))
+        processed_tokens.append(clause)
+        
+    return "".join(processed_tokens)
 
 # =====================================================
 #  同音多義與上下文依賴詞彙偵測 (Homophone Ambiguity Guard)
