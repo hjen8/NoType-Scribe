@@ -260,11 +260,14 @@ class UIManager:
         self.history_win.configure(bg=self.BG_DARK)
         self.history_win.attributes("-topmost", True)
         
-        win_w, win_h = 800, 560
-        sw = self.history_win.winfo_screenwidth()
-        sh = self.history_win.winfo_screenheight()
-        self.history_win.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
-        self.history_win.minsize(750, 450)
+        win_w, win_h = 1050, 640
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        actual_w = min(win_w, max(750, sw - 40))
+        actual_h = min(win_h, max(450, sh - 60))
+        self.history_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
+        self.history_win.minsize(860, 480)
         
         # 標題列
         header = tk.Frame(self.history_win, bg=self.BG_DARK)
@@ -380,7 +383,18 @@ class UIManager:
         )
         
         canvas_window = canvas.create_window((0, 0), window=self._history_frame, anchor="nw")
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
+        
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_window, width=e.width)
+            new_wrap = max(550, e.width - 60)
+            self._history_wraplength = new_wrap
+            if hasattr(self, '_history_frame') and self._history_frame.winfo_exists():
+                for card in self._history_frame.winfo_children():
+                    for w in card.winfo_children():
+                        if isinstance(w, tk.Label) and getattr(w, '_is_history_text', False):
+                            w.configure(wraplength=new_wrap)
+                            
+        canvas.bind("<Configure>", _on_canvas_configure)
         canvas.configure(yscrollcommand=scrollbar.set)
         
         canvas.pack(side="left", fill="both", expand=True)
@@ -615,17 +629,19 @@ class UIManager:
         
         # --- 第二行：修飾後文字 ---
         display_text = rec.refined_text if rec.refined_text else rec.raw_text
-        # 截斷過長文字
-        if len(display_text) > 120:
-            display_text = display_text[:120] + "..."
+        # 截斷過長文字（放寬至 250 字，寬版卡片閱讀更充裕）
+        if len(display_text) > 250:
+            display_text = display_text[:250] + "..."
         
-        tk.Label(
+        lbl_msg = tk.Label(
             card, text=display_text,
             font=("Microsoft JhengHei", 10),
             fg=self.FG_TEXT, bg=self.BG_CARD,
             anchor="w", justify="left",
-            wraplength=620
-        ).pack(fill="x", pady=(6, 0))
+            wraplength=getattr(self, '_history_wraplength', 940)
+        )
+        lbl_msg._is_history_text = True
+        lbl_msg.pack(fill="x", pady=(6, 0))
     
     def _reprocess_record(self, rec):
         if not rec.audio_path or not os.path.exists(rec.audio_path):
@@ -660,64 +676,66 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 520, 390
-        sw = dialog.winfo_screenwidth()
-        sh = dialog.winfo_screenheight()
-        dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
+        win_w, win_h = 660, 440
+        dialog.minsize(580, 400)
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        dialog.geometry(f"{win_w}x{win_h}+{left + (sw - win_w) // 2}+{top + (sh - win_h) // 2}")
         
         # 標題
         tk.Label(
             dialog, text="✏️ 糾錯與自適應學習",
-            font=("Microsoft JhengHei", 13, "bold"),
+            font=("Microsoft JhengHei", 14, "bold"),
             fg=self.FG_TEXT, bg=self.BG_DARK
-        ).pack(anchor="w", padx=20, pady=(15, 5))
+        ).pack(anchor="w", padx=24, pady=(16, 5))
         
         # 整句修改
         tk.Label(
             dialog, text="1. 修正後的完整文字 (更新此卡片顯示):",
-            font=("Microsoft JhengHei", 9, "bold"),
+            font=("Microsoft JhengHei", 11, "bold"),
             fg=self.FG_TIME, bg=self.BG_DARK
-        ).pack(anchor="w", padx=20, pady=(8, 2))
+        ).pack(anchor="w", padx=24, pady=(8, 3))
         
-        entry_full = tk.Entry(dialog, width=58, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_full.pack(padx=20, pady=2)
+        entry_full = tk.Entry(dialog, font=("Microsoft JhengHei", 11), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_full.pack(fill="x", padx=24, pady=2, ipady=3)
         curr_text = rec.refined_text if rec.refined_text else rec.raw_text
         entry_full.insert(0, curr_text)
         entry_full.focus_set()
         
         # 分隔線
-        tk.Frame(dialog, bg="#444444", height=1).pack(fill="x", padx=20, pady=12)
+        tk.Frame(dialog, bg="#444444", height=1).pack(fill="x", padx=24, pady=12)
         
         tk.Label(
             dialog, text="2. 教 AI 專屬詞彙 (自動建立學習記憶，未來永久自動校正):",
-            font=("Microsoft JhengHei", 9, "bold"),
+            font=("Microsoft JhengHei", 11, "bold"),
             fg="#f39c12", bg=self.BG_DARK
-        ).pack(anchor="w", padx=20, pady=(2, 6))
+        ).pack(anchor="w", padx=24, pady=(2, 6))
         
         pair_frame = tk.Frame(dialog, bg=self.BG_DARK)
-        pair_frame.pack(fill="x", padx=20)
+        pair_frame.pack(fill="x", padx=24)
         
         # 左：聽錯的詞
         left_col = tk.Frame(pair_frame, bg=self.BG_DARK)
         left_col.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        tk.Label(left_col, text="AI 聽錯的詞 (選填):", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
-        entry_wrong = tk.Entry(left_col, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_wrong.pack(fill="x", pady=2)
+        tk.Label(left_col, text="AI 聽錯的詞 (選填):", font=("Microsoft JhengHei", 10), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
+        entry_wrong = tk.Entry(left_col, font=("Microsoft JhengHei", 11), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_wrong.pack(fill="x", pady=2, ipady=3)
         
         # 右：真正要表達的詞
         right_col = tk.Frame(pair_frame, bg=self.BG_DARK)
         right_col.pack(side="right", fill="x", expand=True, padx=(10, 0))
-        tk.Label(right_col, text="真正正確的詞 (自動存入字典):", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
-        entry_correct = tk.Entry(right_col, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_correct.pack(fill="x", pady=2)
+        tk.Label(right_col, text="真正正確的詞 (自動存入字典):", font=("Microsoft JhengHei", 10), fg=self.FG_DIM, bg=self.BG_DARK).pack(anchor="w")
+        entry_correct = tk.Entry(right_col, font=("Microsoft JhengHei", 11), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_correct.pack(fill="x", pady=2, ipady=3)
         
         hint_lbl = tk.Label(
             dialog, 
             text="💡 例如：聽錯「實心營」➔ 正確「石星瑩」，儲存後未來再說這句話就會 100% 正確！",
-            font=("Microsoft JhengHei", 8),
+            font=("Microsoft JhengHei", 9),
             fg="#95a5a6", bg=self.BG_DARK
         )
-        hint_lbl.pack(anchor="w", padx=20, pady=(8, 15))
+        hint_lbl.pack(anchor="w", padx=24, pady=(8, 15))
         
         # 按鈕區
         def save():
@@ -739,18 +757,18 @@ class UIManager:
             self._refresh_history()
             
         btn_box = tk.Frame(dialog, bg=self.BG_DARK)
-        btn_box.pack(pady=(5, 15))
+        btn_box.pack(pady=(6, 16))
         
         tk.Button(
             btn_box, text=" 儲存並學習 ", command=save,
             font=("Microsoft JhengHei", 10, "bold"),
-            bg="#27ae60", fg="white", bd=0, padx=12, pady=4
+            bg="#27ae60", fg="white", bd=0, padx=14, pady=5
         ).pack(side="left", padx=10)
         
         tk.Button(
             btn_box, text=" 取消 ", command=dialog.destroy,
             font=("Microsoft JhengHei", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=12, pady=5
         ).pack(side="left", padx=10)
     
     def _stop_audio(self):
@@ -910,32 +928,34 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 500, 415
-        sw = dialog.winfo_screenwidth()
-        sh = dialog.winfo_screenheight()
-        dialog.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
+        win_w, win_h = 660, 480
+        dialog.minsize(580, 420)
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        dialog.geometry(f"{win_w}x{win_h}+{left + (sw - win_w) // 2}+{top + (sh - win_h) // 2}")
         
         tk.Label(
             dialog, text="✏️ 極速教學與詞彙學習",
-            font=("Microsoft JhengHei", 12, "bold"),
+            font=("Microsoft JhengHei", 14, "bold"),
             fg=self.FG_TEXT, bg=self.BG_DARK
-        ).pack(anchor="w", padx=20, pady=(12, 4))
+        ).pack(anchor="w", padx=24, pady=(16, 8))
         
         # 聽錯的詞
         row1 = tk.Frame(dialog, bg=self.BG_DARK)
-        row1.pack(fill="x", padx=20, pady=3)
-        tk.Label(row1, text="聽錯的詞：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        row1.pack(fill="x", padx=24, pady=5)
+        tk.Label(row1, text="聽錯的詞：", font=("Microsoft JhengHei", 11), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
         wrong_var = tk.StringVar(value=wrong_text if wrong_text else "")
-        entry_wrong = tk.Entry(row1, textvariable=wrong_var, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_wrong.pack(side="left", fill="x", expand=True)
+        entry_wrong = tk.Entry(row1, textvariable=wrong_var, font=("Microsoft JhengHei", 12), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_wrong.pack(side="left", fill="x", expand=True, ipady=3)
             
         # 正確的詞
         row2 = tk.Frame(dialog, bg=self.BG_DARK)
-        row2.pack(fill="x", padx=20, pady=3)
-        tk.Label(row2, text="正確的詞：", font=("Microsoft JhengHei", 9, "bold"), fg="#f39c12", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        row2.pack(fill="x", padx=24, pady=5)
+        tk.Label(row2, text="正確的詞：", font=("Microsoft JhengHei", 11, "bold"), fg="#f39c12", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
         correct_var = tk.StringVar(value=wrong_text if wrong_text else "")
-        entry_correct = tk.Entry(row2, textvariable=correct_var, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_correct.pack(side="left", fill="x", expand=True)
+        entry_correct = tk.Entry(row2, textvariable=correct_var, font=("Microsoft JhengHei", 12), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_correct.pack(side="left", fill="x", expand=True, ipady=3)
         entry_correct.focus_set()
         if wrong_text:
             entry_correct.icursor(tk.END)
@@ -951,19 +971,19 @@ class UIManager:
         cat_var = tk.StringVar(value=default_pred if default_pred in cat_options else (cat_options[0] if cat_options else ""))
         
         row_cat = tk.Frame(dialog, bg=self.BG_DARK)
-        row_cat.pack(fill="x", padx=20, pady=3)
-        tk.Label(row_cat, text="自動歸類：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        row_cat.pack(fill="x", padx=24, pady=5)
+        tk.Label(row_cat, text="自動歸類：", font=("Microsoft JhengHei", 11), fg=self.FG_DIM, bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
         from tkinter import ttk
-        cat_combo = ttk.Combobox(row_cat, textvariable=cat_var, values=cat_options, state="readonly", font=("Microsoft JhengHei", 9))
-        cat_combo.pack(side="left", fill="x", expand=True)
+        cat_combo = ttk.Combobox(row_cat, textvariable=cat_var, values=cat_options, state="readonly", font=("Microsoft JhengHei", 11))
+        cat_combo.pack(side="left", fill="x", expand=True, ipady=2)
 
         # 語境限制 (可選，以逗號分隔關鍵詞，如：考卷, 考試)
         row_ctx = tk.Frame(dialog, bg=self.BG_DARK)
-        row_ctx.pack(fill="x", padx=20, pady=3)
-        tk.Label(row_ctx, text="語境限制：", font=("Microsoft JhengHei", 9), fg="#3498db", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
+        row_ctx.pack(fill="x", padx=24, pady=5)
+        tk.Label(row_ctx, text="語境限制：", font=("Microsoft JhengHei", 11), fg="#3498db", bg=self.BG_DARK, width=10, anchor="w").pack(side="left")
         context_var = tk.StringVar(value="")
-        entry_context = tk.Entry(row_ctx, textvariable=context_var, font=("Microsoft JhengHei", 9), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-        entry_context.pack(side="left", fill="x", expand=True)
+        entry_context = tk.Entry(row_ctx, textvariable=context_var, font=("Microsoft JhengHei", 11), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+        entry_context.pack(side="left", fill="x", expand=True, ipady=3)
         entry_context.bind("<Control-a>", lambda e: (entry_context.select_range(0, tk.END), "break")[1])
         
         # 提示標籤
@@ -971,11 +991,11 @@ class UIManager:
         lbl_hint = tk.Label(
             dialog, 
             text=hint_text, 
-            font=("Microsoft JhengHei", 8),
+            font=("Microsoft JhengHei", 10),
             fg="#95a5a6", bg=self.BG_DARK,
             justify="left", anchor="w"
         )
-        lbl_hint.pack(anchor="w", padx=20, pady=(6, 8), fill="x")
+        lbl_hint.pack(anchor="w", padx=24, pady=(8, 10), fill="x")
 
         is_updating_warning = False
         def update_ambiguity_warning(*args):
@@ -999,26 +1019,26 @@ class UIManager:
                         lbl_hint.config(
                             text=f"✅ 已設定語境限制（{current_ctx}）！\n僅在包含上述關鍵詞時替換，絕不誤傷其他前後用語。",
                             fg="#2ecc71",
-                            font=("Microsoft JhengHei", 8, "bold")
+                            font=("Microsoft JhengHei", 10, "bold")
                         )
                     else:
                         lbl_hint.config(
                             text=amb["warning"],
                             fg="#f39c12",
-                            font=("Microsoft JhengHei", 8, "bold")
+                            font=("Microsoft JhengHei", 10, "bold")
                         )
                 else:
                     if current_ctx:
                         lbl_hint.config(
                             text=f"💡 已設定語境限制（{current_ctx}）。僅在命中關鍵詞時執行替換。",
                             fg="#3498db",
-                            font=("Microsoft JhengHei", 8)
+                            font=("Microsoft JhengHei", 10)
                         )
                     else:
                         lbl_hint.config(
                             text="💡「僅本次替換」只修改當前選取文字；「永久學習」會自動歸類存入字典供日後自動校正",
                             fg="#95a5a6",
-                            font=("Microsoft JhengHei", 8)
+                            font=("Microsoft JhengHei", 10)
                         )
             finally:
                 is_updating_warning = False
@@ -1091,30 +1111,30 @@ class UIManager:
         
         # 三大按鈕區
         btn_box = tk.Frame(dialog, bg=self.BG_DARK)
-        btn_box.pack(pady=4)
+        btn_box.pack(pady=(8, 14))
         
         # 1. 僅本次替換
         btn_replace_once = tk.Button(
             btn_box, text=" 僅本次替換 (Enter) ", command=replace_once,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#2980b9", fg="white", bd=0, padx=10, pady=4
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=14, pady=6
         )
-        btn_replace_once.pack(side="left", padx=6)
+        btn_replace_once.pack(side="left", padx=8)
         
         # 2. 永久學習並替換
         btn_replace_learn = tk.Button(
             btn_box, text=" 永久學習並替換 (Shift+Enter) ", command=replace_and_learn,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#27ae60", fg="white", bd=0, padx=10, pady=4
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=16, pady=6
         )
-        btn_replace_learn.pack(side="left", padx=6)
+        btn_replace_learn.pack(side="left", padx=8)
         
         # 3. 取消
         tk.Button(
             btn_box, text=" 取消 (Esc) ", command=cancel,
-            font=("Microsoft JhengHei", 9),
-            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
-        ).pack(side="left", padx=6)
+            font=("Microsoft JhengHei", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=12, pady=6
+        ).pack(side="left", padx=8)
 
     # =====================================================
     #  操作說明與快捷鍵指南 (Help / README)
