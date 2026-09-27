@@ -9,7 +9,12 @@ taskkill /f /im pythonw.exe >nul 2>&1
 taskkill /f /im python.exe >nul 2>&1
 timeout /t 1 >nul
 
-if exist "E:\AI_Work\NoType" (
+set "TARGET_DIR="
+if exist "E:\AI_Work\NoType\skills\typeless-scribe\main.py" (
+    set "TARGET_DIR=E:\AI_Work\NoType"
+) else if exist "C:\AI_Work\NoType\skills\typeless-scribe\main.py" (
+    set "TARGET_DIR=C:\AI_Work\NoType"
+) else if exist "E:\AI_Work\NoType" (
     set "TARGET_DIR=E:\AI_Work\NoType"
 ) else (
     set "TARGET_DIR=C:\AI_Work\NoType"

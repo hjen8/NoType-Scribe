@@ -22,12 +22,14 @@ from PIL import Image, ImageDraw
 import pystray
 from ui_manager import ui
 from keyboard_hook import KeyboardManager
-from backup_manager import restore_from_backup, sync_to_backup
+from backup_manager import restore_from_backup, sync_to_backup, sync_device_diagnostics
 import config_manager
 
 # 自動災難復原防護：若本地缺少關鍵設定，從 Dropbox 鏡像還原；啟動時靜默鏡像備份
 restore_from_backup()
 sync_to_backup()
+sync_device_diagnostics()
+
 
 
 def create_image():

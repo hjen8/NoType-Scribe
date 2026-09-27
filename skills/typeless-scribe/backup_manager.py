@@ -80,10 +80,40 @@ def restore_from_backup():
         return True
     return False
 
+def sync_device_diagnostics():
+    """若當前設備為筆電 (非 intel8 主機)，自動將 run_log.txt 與 history.json 鏡像至 Dropbox 供除錯診斷。"""
+    try:
+        import socket
+        hostname = socket.gethostname().lower()
+        if hostname == "intel8":
+            return
+        backup_dir = get_backup_dir()
+        if not backup_dir:
+            return
+        
+        # 複製 run_log.txt 到 run_log_notebook.txt
+        log_src = os.path.join(BASE_DIR, "run_log.txt")
+        if os.path.exists(log_src):
+            try:
+                shutil.copy2(log_src, os.path.join(backup_dir, "run_log_notebook.txt"))
+            except Exception:
+                pass
+                
+        # 複製 history.json 到 history_notebook.json
+        hist_src = os.path.join(BASE_DIR, "history.json")
+        if os.path.exists(hist_src):
+            try:
+                shutil.copy2(hist_src, os.path.join(backup_dir, "history_notebook.json"))
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[Backup] 診斷同步失敗: {e}")
+
 if __name__ == "__main__":
     print(f"備份目錄: {get_backup_dir()}")
     if sync_to_backup():
         print("[OK] 鏡像備份成功！")
     else:
         print("[FAIL] 未偵測到可用備份目錄。")
+
 

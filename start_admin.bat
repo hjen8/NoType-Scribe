@@ -12,5 +12,25 @@ if %errorLevel% == 0 (
 
 :run
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Process python, pythonw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500" >nul 2>&1
-start "" /d "%~dp0skills\typeless-scribe" "%~dp0skills\typeless-scribe\venv\Scripts\pythonw.exe" "main.py"
 
+set "BASE_DIR=%~dp0"
+set "SKILL_DIR=%BASE_DIR%skills\typeless-scribe"
+
+set "PYTHON_EXE="
+if exist "%SKILL_DIR%\venv\Scripts\pythonw.exe" set "PYTHON_EXE=%SKILL_DIR%\venv\Scripts\pythonw.exe"
+if not defined PYTHON_EXE if exist "%BASE_DIR%venv\Scripts\pythonw.exe" set "PYTHON_EXE=%BASE_DIR%venv\Scripts\pythonw.exe"
+if not defined PYTHON_EXE if exist "%BASE_DIR%.venv\Scripts\pythonw.exe" set "PYTHON_EXE=%BASE_DIR%.venv\Scripts\pythonw.exe"
+if not defined PYTHON_EXE (
+    where pythonw >nul 2>&1 && set "PYTHON_EXE=pythonw.exe"
+)
+if not defined PYTHON_EXE (
+    where python >nul 2>&1 && set "PYTHON_EXE=python.exe"
+)
+
+if not defined PYTHON_EXE (
+    echo [ERROR] Python not found! Please run setup_new_pc.bat.
+    pause
+    exit /b 1
+)
+
+start "" /d "%SKILL_DIR%" "%PYTHON_EXE%" "main.py"

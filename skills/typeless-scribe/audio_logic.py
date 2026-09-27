@@ -7,8 +7,9 @@ from history_manager import generate_audio_filename
 
 # 最短錄音秒數，低於此值視為誤觸，不送 API
 MIN_RECORD_SECONDS = 0.8
-# 靜音門檻 (RMS 低於此值視為無人說話)
-SILENCE_THRESHOLD = 0.005
+# 靜音門檻 (RMS 低於此值視為無人說話，設 0.0005 極限靈敏度兼顧筆電遠距內建麥克風)
+SILENCE_THRESHOLD = 0.0005
+
 
 class AudioRecorder:
     def __init__(self, samplerate=16000, channels=1):
@@ -78,9 +79,9 @@ class AudioRecorder:
                 raise e
 
     def stop_recording(self):
-        """停止錄音，回傳 (file_path, duration_sec) 或 (None, 0)"""
+        """停止錄音，回傳 (file_path, duration_sec, reason) 或 (None, 0, reason)"""
         if not self.recording:
-            return None, 0
+            return None, 0, "not_recording"
         
         self.recording = False
         if self.stream is not None:
@@ -96,10 +97,10 @@ class AudioRecorder:
         
         duration = _time.time() - self.start_time
         
-        # 防呆：錄音時間太短，視為誤觸 Alt 鍵
+        # 防呆：錄音時間太短，視為誤觸
         if duration < MIN_RECORD_SECONDS:
             print(f"[Audio] Recording only {duration:.1f}s, below {MIN_RECORD_SECONDS}s threshold, ignored.")
-            return None, 0
+            return None, 0, "too_short"
         
         audio_data = []
         while not self.q.empty():
@@ -107,15 +108,15 @@ class AudioRecorder:
             
         if not audio_data:
             print("[Audio] No audio data captured.")
-            return None, 0
+            return None, 0, "no_data"
             
         audio_data = np.concatenate(audio_data, axis=0)
         
-        # 靜音偵測：若音量太低，跳過送 API
-        rms = np.sqrt(np.mean(audio_data ** 2))
+        # 靜音偵測：若音量太低，跳過送 API (0.0005 靈敏門檻兼顧筆電)
+        rms = float(np.sqrt(np.mean(audio_data ** 2)))
         if rms < SILENCE_THRESHOLD:
             print(f"[Audio] Volume too low (RMS={rms:.4f}), ignored.")
-            return None, 0
+            return None, 0, f"silence_{rms:.4f}"
         
         # 儲存到音檔快取目錄 (帶時間戳)
         output_path = generate_audio_filename()
@@ -131,7 +132,7 @@ class AudioRecorder:
                 sf.write(output_path, audio_data, self.samplerate)
             except Exception as e2:
                 print(f"[Audio] Critical: Audio write failed completely ({e2})")
-                return None, 0
+                return None, 0, "write_failed"
 
         print(f"[Audio] Recorded {duration:.1f}s (RMS={rms:.4f}) -> {output_path}")
-        return output_path, round(duration, 1)
+        return output_path, round(duration, 1), "ok"

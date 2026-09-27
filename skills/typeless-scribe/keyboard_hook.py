@@ -462,16 +462,34 @@ class KeyboardManager:
         # 徹底杜絕 Windows LowLevelHooksTimeout (200ms) 靜默拔勾 (Unhook) 致命問題！
         def _stop_worker():
             print(f"[REC] Recording stopped ({trigger_type}), processing in background...")
+            reason = "ok"
             try:
-                file_path, duration_sec = self.recorder.stop_recording()
+                res = self.recorder.stop_recording()
+                if len(res) == 3:
+                    file_path, duration_sec, reason = res
+                else:
+                    file_path, duration_sec = res
             except Exception as e:
                 print(f"[REC] Exception in stop_recording: {e}")
-                file_path, duration_sec = None, 0
+                file_path, duration_sec, reason = None, 0, str(e)
             
             if file_path:
                 self.process_audio_thread(
                     file_path, duration_sec, self.app_context, self.target_hwnd, self.ambient_context
                 )
+            else:
+                if reason == "too_short":
+                    ui.toast("⏱ 錄音時間過短 (未滿 0.8 秒)，請說完再按停止", is_error=False, duration=2500)
+                elif reason.startswith("silence"):
+                    ui.toast("🔇 麥克風音量過小，請靠近麥克風或調大輸入音量", is_error=True, duration=3500)
+                elif reason == "no_data":
+                    ui.toast("⚠️ 麥克風未擷取到音訊，請檢查 Windows 麥克風權限", is_error=True, duration=3500)
+                
+            try:
+                from backup_manager import sync_device_diagnostics
+                sync_device_diagnostics()
+            except Exception:
+                pass
         
         threading.Thread(target=_stop_worker, daemon=True).start()
 
