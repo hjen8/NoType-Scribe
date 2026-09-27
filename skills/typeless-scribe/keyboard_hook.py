@@ -309,7 +309,6 @@ class KeyboardManager:
             record.status = "success"
             record.refined_text = refined_text
             add_record(record)
-            ui.msg_queue.put('refresh_history')
             
             # 確保焦點鎖定在原本說話的視窗
             if target_hwnd:
@@ -356,6 +355,9 @@ class KeyboardManager:
                     pyperclip.copy(original_clipboard)
             except Exception:
                 pass
+            
+            # 4. 關鍵防護：貼上與剪貼簿還原完全就緒後，才安全通知 UI 刷新歷史面板 (杜絕 Tkinter 凍結導致剪貼簿競態)
+            ui.msg_queue.put('refresh_history')
             
         except Exception as e:
             err_msg = str(e)

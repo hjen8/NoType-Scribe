@@ -234,6 +234,8 @@ class UIManager:
         
         self._history_search_var = tk.StringVar()
         self._history_search_placeholder = "搜尋歷史紀錄內容、逐字稿或時間..."
+        self._is_updating_placeholder = False
+        self._search_debounce_timer = None
         
         self._history_search_entry = tk.Entry(
             search_box,
@@ -242,22 +244,29 @@ class UIManager:
             bg="#2a2a2a", fg=self.FG_DIM,
             insertbackground="white", bd=0, relief="flat"
         )
+        self._is_updating_placeholder = True
         self._history_search_entry.insert(0, self._history_search_placeholder)
+        self._is_updating_placeholder = False
         self._history_search_entry.pack(side="left", fill="x", expand=True, ipady=4, padx=(2, 4))
         
         def _on_search_focus_in(event):
             if self._history_search_entry.get() == self._history_search_placeholder:
+                self._is_updating_placeholder = True
                 self._history_search_entry.delete(0, tk.END)
                 self._history_search_entry.configure(fg=self.FG_TEXT)
+                self._is_updating_placeholder = False
                 
         def _on_search_focus_out(event):
             if not self._history_search_entry.get().strip():
+                self._is_updating_placeholder = True
+                self._history_search_entry.delete(0, tk.END)
                 self._history_search_entry.insert(0, self._history_search_placeholder)
                 self._history_search_entry.configure(fg=self.FG_DIM)
+                self._is_updating_placeholder = False
                 
         self._history_search_entry.bind("<FocusIn>", _on_search_focus_in)
         self._history_search_entry.bind("<FocusOut>", _on_search_focus_out)
-        self._history_search_entry.bind("<KeyRelease>", lambda e: self._on_history_search_change())
+        self._history_search_var.trace_add("write", lambda *args: self._on_history_search_change())
         
         # 一鍵清除按鈕
         self._history_clear_btn = tk.Button(
@@ -300,12 +309,18 @@ class UIManager:
         
         self._history_canvas = canvas
         
-        # 視窗關閉時解綁滾輪
+        # 視窗關閉時解綁滾輪與取消防抖定時器
         def on_close():
             try:
                 canvas.unbind_all("<MouseWheel>")
             except Exception:
                 pass
+            if hasattr(self, '_search_debounce_timer') and self._search_debounce_timer:
+                try:
+                    self.root.after_cancel(self._search_debounce_timer)
+                except Exception:
+                    pass
+                self._search_debounce_timer = None
             self.history_win.destroy()
             self.history_win = None
         self.history_win.protocol("WM_DELETE_WINDOW", on_close)
@@ -321,12 +336,31 @@ class UIManager:
 
     def _clear_history_search(self):
         if hasattr(self, '_history_search_entry') and self._history_search_entry.winfo_exists():
+            if hasattr(self, '_search_debounce_timer') and self._search_debounce_timer:
+                try:
+                    self.root.after_cancel(self._search_debounce_timer)
+                except Exception:
+                    pass
+                self._search_debounce_timer = None
+            self._is_updating_placeholder = True
             self._history_search_entry.delete(0, tk.END)
             self._history_search_entry.insert(0, self._history_search_placeholder)
             self._history_search_entry.configure(fg=self.FG_DIM)
+            self._is_updating_placeholder = False
             self._refresh_history(filter_query="")
 
     def _on_history_search_change(self):
+        if getattr(self, '_is_updating_placeholder', False):
+            return
+        if hasattr(self, '_search_debounce_timer') and self._search_debounce_timer:
+            try:
+                self.root.after_cancel(self._search_debounce_timer)
+            except Exception:
+                pass
+        self._search_debounce_timer = self.root.after(180, self._do_debounced_search)
+
+    def _do_debounced_search(self):
+        self._search_debounce_timer = None
         query = self._get_current_search_query()
         self._refresh_history(filter_query=query)
     
@@ -354,9 +388,11 @@ class UIManager:
                     query in (rec.raw_text or "").lower() or
                     query in (rec.timestamp or "").lower())
             ]
-            self._history_count_label.config(text=f"共 {len(filtered_records)} / {total_count} 筆")
+            total_matched = len(filtered_records)
+            self._history_count_label.config(text=f"共 {total_matched} / {total_count} 筆")
         else:
             filtered_records = records
+            total_matched = len(records)
             self._history_count_label.config(text=f"共 {total_count} 筆")
         
         if not filtered_records:
@@ -376,8 +412,18 @@ class UIManager:
                 ).pack(pady=60)
             return
         
-        for rec in filtered_records:
+        # 效能極速分頁保護 (Top 50 Capped Rendering)：避免一次建立 360+ 個卡片 (>2000 個元件) 凍結 UI
+        display_records = filtered_records[:50]
+        for rec in display_records:
             self._create_history_card(rec)
+            
+        if total_matched > 50:
+            tk.Label(
+                self._history_frame,
+                text=f"\n─── 已顯示前 50 筆（共符合 {total_matched} 筆），請輸入關鍵字縮小搜尋範圍 ───\n",
+                font=("Microsoft JhengHei", 9),
+                fg=self.FG_DIM, bg=self.BG_DARK
+            ).pack(pady=10)
             
         if hasattr(self, '_history_canvas') and self._history_canvas.winfo_exists():
             self._history_canvas.yview_moveto(0)
