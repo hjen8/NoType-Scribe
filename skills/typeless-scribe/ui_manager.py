@@ -5,6 +5,17 @@ import subprocess
 import pyperclip
 from config_manager import get_api_key, set_api_key
 
+# 啟用 Windows 高 DPI 感知 (Per-Monitor DPI Aware)，徹底杜絕高解析度筆電縮放時視窗錯位與偏向螢幕中央問題
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        import ctypes
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 class UIManager:
     def __init__(self):
         self.root = tk.Tk()
@@ -17,6 +28,24 @@ class UIManager:
         self.help_win = None
         self.student_reminder_win = None
         self.toast_wins = []
+
+    def _get_screen_workarea(self):
+        """取得 Windows 當前主螢幕可用工作區（扣除下方工作列後的真實邊界，杜絕 DPI 縮放偏心）"""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            class RECT(ctypes.Structure):
+                _fields_ = [('left', wintypes.LONG), ('top', wintypes.LONG), 
+                            ('right', wintypes.LONG), ('bottom', wintypes.LONG)]
+            rect = RECT()
+            if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
+                return rect.left, rect.top, rect.right, rect.bottom
+        except Exception:
+            pass
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        return 0, 0, sw, sh
+
 
     def show_toast(self, text, bg="#c0392b", duration=3500):
         try:
@@ -39,14 +68,13 @@ class UIManager:
             lbl.pack()
             
             toast.update_idletasks()
-            sw = toast.winfo_screenwidth()
-            sh = toast.winfo_screenheight()
+            left, top, right, bottom = self._get_screen_workarea()
             w = toast.winfo_reqwidth()
             h = toast.winfo_reqheight()
             
             # 顯示在主螢幕右下角
-            offset_y = 100 + (len(self.toast_wins) * (h + 10))
-            toast.geometry(f"{w}x{h}+{sw - w - 40}+{sh - offset_y}")
+            offset_y = 30 + (len(self.toast_wins) * (h + 10))
+            toast.geometry(f"{w}x{h}+{right - w - 25}+{bottom - offset_y}")
             
             self.toast_wins.append(toast)
             
@@ -67,33 +95,58 @@ class UIManager:
         self.msg_queue.put(('show_toast', text, bg, duration))
 
     def show_floating(self):
-        if self.floating_win:
+        if self.floating_win and self.floating_win.winfo_exists():
             return
         
         self.floating_win = tk.Toplevel(self.root)
         self.floating_win.overrideredirect(True)
         self.floating_win.attributes("-topmost", True)
-        self.floating_win.configure(bg="#2c3e50")
+        self.floating_win.configure(bg="#ff4757") # 醒目亮紅高質感外框
+        
+        # 內層深黑尊爵卡片容器 (加寬放大，極致清晰)
+        inner = tk.Frame(self.floating_win, bg="#181818", padx=18, pady=12)
+        inner.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        # 第一行：大字麥克風與錄音狀態提示
+        row1 = tk.Frame(inner, bg="#181818")
+        row1.pack(anchor="center")
         
         tk.Label(
-            self.floating_win, 
-            text="🎤 錄音中...", 
-            font=("Microsoft JhengHei", 14, "bold"), 
-            fg="white", 
-            bg="#2c3e50", 
-            padx=10, 
-            pady=5
-        ).pack()
+            row1, 
+            text="🔴 正在錄音中...", 
+            font=("Microsoft JhengHei", 15, "bold"), 
+            fg="#ffffff", 
+            bg="#181818"
+        ).pack(side="left")
         
-        # 鎖定在主螢幕右下角
-        sw = self.floating_win.winfo_screenwidth()
-        sh = self.floating_win.winfo_screenheight()
-        w, h = 150, 40
-        self.floating_win.geometry(f"{w}x{h}+{sw-w-50}+{sh-h-100}")
+        # 第二行：清楚的操作提醒
+        tk.Label(
+            inner,
+            text="再按一下 ~ 鍵 停止並貼上",
+            font=("Microsoft JhengHei", 10),
+            fg="#a4b0be",
+            bg="#181818"
+        ).pack(anchor="center", pady=(5, 0))
+        
+        self.floating_win.update_idletasks()
+        w = max(260, self.floating_win.winfo_reqwidth())
+        h = max(76, self.floating_win.winfo_reqheight())
+        
+        # 精準鎖定在螢幕右下角 (嚴格依據真實可用工作區，緊靠工作列右上方)
+        left, top, right, bottom = self._get_screen_workarea()
+        margin_x = 25
+        margin_y = 20
+        x = right - w - margin_x
+        y = bottom - h - margin_y
+        
+        self.floating_win.geometry(f"{w}x{h}+{x}+{y}")
 
     def hide_floating(self):
         if self.floating_win:
-            self.floating_win.destroy()
+            try:
+                self.floating_win.destroy()
+            except Exception:
+                pass
             self.floating_win = None
 
     def open_settings(self):
