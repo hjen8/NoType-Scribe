@@ -246,6 +246,70 @@ class UIManager:
     BTN_BG    = "#3a3a3a"
     BTN_HOVER = "#4a4a4a"
     
+    def _apply_saved_geometry(self, win, win_name: str, default_w: int, default_h: int, min_w: int, min_h: int):
+        """套用記憶中的視窗幾何尺寸與位置，若無或超出螢幕則自適應置中。"""
+        import config_manager
+        import re
+        
+        win.minsize(min_w, min_h)
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        
+        saved_geom = config_manager.get_window_geometry(win_name)
+        target_w, target_h = default_w, default_h
+        target_x, target_y = None, None
+        
+        if saved_geom:
+            m = re.match(r"^(\d+)x(\d+)(?:([+-]\d+)([+-]\d+))?$", saved_geom.strip())
+            if m:
+                target_w = max(min_w, int(m.group(1)))
+                target_h = max(min_h, int(m.group(2)))
+                if m.group(3) and m.group(4):
+                    target_x = int(m.group(3))
+                    target_y = int(m.group(4))
+                    
+        # 螢幕安全邊界防護
+        actual_w = min(target_w, max(min_w, sw - 40))
+        actual_h = min(target_h, max(min_h, sh - 60))
+        
+        # 若無位置記憶或記憶位置已超出目前螢幕可視區域，自動安全置中
+        if (target_x is None or target_y is None or 
+            target_x < left - actual_w // 2 or target_x > right - 100 or 
+            target_y < top - 20 or target_y > bottom - 100):
+            target_x = left + (sw - actual_w) // 2
+            target_y = top + (sh - actual_h) // 2
+            
+        win.geometry(f"{actual_w}x{actual_h}+{target_x}+{target_y}")
+
+    def _bind_geometry_saving(self, win, win_name: str):
+        """為視窗綁定自動幾何尺寸與位置記憶（防抖 500ms 寫入設定檔）。"""
+        import config_manager
+        
+        timer_attr = f"_geom_save_timer_{win_name}"
+        
+        def _do_save():
+            setattr(self, timer_attr, None)
+            try:
+                if win and win.winfo_exists():
+                    if win.state() == "normal":
+                        config_manager.set_window_geometry(win_name, win.geometry())
+            except Exception:
+                pass
+                
+        def _on_configure(event):
+            # 只有當事件源是頂層視窗本身 (非內部子元件) 時才觸發防抖儲存
+            if event.widget == win:
+                old_timer = getattr(self, timer_attr, None)
+                if old_timer:
+                    try:
+                        self.root.after_cancel(old_timer)
+                    except Exception:
+                        pass
+                setattr(self, timer_attr, self.root.after(500, _do_save))
+                
+        win.bind("<Configure>", _on_configure, add="+")
+
     def open_history(self):
         from history_manager import get_all, get_count
         
@@ -260,14 +324,8 @@ class UIManager:
         self.history_win.configure(bg=self.BG_DARK)
         self.history_win.attributes("-topmost", True)
         
-        win_w, win_h = 1050, 640
-        left, top, right, bottom = self._get_screen_workarea()
-        sw = right - left
-        sh = bottom - top
-        actual_w = min(win_w, max(750, sw - 40))
-        actual_h = min(win_h, max(450, sh - 60))
-        self.history_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
-        self.history_win.minsize(860, 480)
+        self._apply_saved_geometry(self.history_win, "history", default_w=1050, default_h=640, min_w=860, min_h=480)
+        self._bind_geometry_saving(self.history_win, "history")
         
         # 標題列
         header = tk.Frame(self.history_win, bg=self.BG_DARK)
@@ -411,6 +469,12 @@ class UIManager:
         def on_close():
             self._stop_audio()  # 立即停止播放，杜絕視窗關閉後背景幽靈播放
             try:
+                if self.history_win and self.history_win.winfo_exists() and self.history_win.state() == "normal":
+                    import config_manager
+                    config_manager.set_window_geometry("history", self.history_win.geometry())
+            except Exception:
+                pass
+            try:
                 canvas.unbind_all("<MouseWheel>")
             except Exception:
                 pass
@@ -420,6 +484,12 @@ class UIManager:
                 except Exception:
                     pass
                 self._search_debounce_timer = None
+            if hasattr(self, '_geom_save_timer_history') and self._geom_save_timer_history:
+                try:
+                    self.root.after_cancel(self._geom_save_timer_history)
+                except Exception:
+                    pass
+                self._geom_save_timer_history = None
             self.history_win.destroy()
             self.history_win = None
         self.history_win.protocol("WM_DELETE_WINDOW", on_close)
@@ -676,12 +746,9 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 660, 440
-        dialog.minsize(580, 400)
-        left, top, right, bottom = self._get_screen_workarea()
-        sw = right - left
-        sh = bottom - top
-        dialog.geometry(f"{win_w}x{win_h}+{left + (sw - win_w) // 2}+{top + (sh - win_h) // 2}")
+        self._apply_saved_geometry(dialog, "correction", default_w=660, default_h=440, min_w=580, min_h=400)
+        self._bind_geometry_saving(dialog, "correction")
+        dialog.resizable(True, True)
         
         # 標題
         tk.Label(
@@ -738,6 +805,23 @@ class UIManager:
         hint_lbl.pack(anchor="w", padx=24, pady=(8, 15))
         
         # 按鈕區
+        def _close_correction_dialog():
+            try:
+                if dialog and dialog.winfo_exists() and dialog.state() == "normal":
+                    import config_manager
+                    config_manager.set_window_geometry("correction", dialog.geometry())
+            except Exception:
+                pass
+            if hasattr(self, '_geom_save_timer_correction') and self._geom_save_timer_correction:
+                try:
+                    self.root.after_cancel(self._geom_save_timer_correction)
+                except Exception:
+                    pass
+                self._geom_save_timer_correction = None
+            dialog.destroy()
+            
+        dialog.protocol("WM_DELETE_WINDOW", _close_correction_dialog)
+        
         def save():
             from learning_manager import add_correction
             new_sentence = entry_full.get().strip()
@@ -753,7 +837,7 @@ class UIManager:
             else:
                 self.toast("✅ 歷史紀錄文字已更新！", is_error=False, duration=2000)
                 
-            dialog.destroy()
+            _close_correction_dialog()
             self._refresh_history()
             
         btn_box = tk.Frame(dialog, bg=self.BG_DARK)
@@ -766,7 +850,7 @@ class UIManager:
         ).pack(side="left", padx=10)
         
         tk.Button(
-            btn_box, text=" 取消 ", command=dialog.destroy,
+            btn_box, text=" 取消 ", command=_close_correction_dialog,
             font=("Microsoft JhengHei", 10),
             bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=12, pady=5
         ).pack(side="left", padx=10)
@@ -928,12 +1012,9 @@ class UIManager:
         dialog.configure(bg=self.BG_DARK)
         dialog.attributes("-topmost", True)
         
-        win_w, win_h = 660, 480
-        dialog.minsize(580, 420)
-        left, top, right, bottom = self._get_screen_workarea()
-        sw = right - left
-        sh = bottom - top
-        dialog.geometry(f"{win_w}x{win_h}+{left + (sw - win_w) // 2}+{top + (sh - win_h) // 2}")
+        self._apply_saved_geometry(dialog, "quick_learn", default_w=660, default_h=480, min_w=580, min_h=420)
+        self._bind_geometry_saving(dialog, "quick_learn")
+        dialog.resizable(True, True)
         
         tk.Label(
             dialog, text="✏️ 極速教學與詞彙學習",
@@ -1056,10 +1137,27 @@ class UIManager:
         context_var.trace_add("write", update_ambiguity_warning)
         update_ambiguity_warning()
         
+        def _close_quick_learn():
+            try:
+                if dialog and dialog.winfo_exists() and dialog.state() == "normal":
+                    import config_manager
+                    config_manager.set_window_geometry("quick_learn", dialog.geometry())
+            except Exception:
+                pass
+            if hasattr(self, '_geom_save_timer_quick_learn') and self._geom_save_timer_quick_learn:
+                try:
+                    self.root.after_cancel(self._geom_save_timer_quick_learn)
+                except Exception:
+                    pass
+                self._geom_save_timer_quick_learn = None
+            dialog.destroy()
+            
+        dialog.protocol("WM_DELETE_WINDOW", _close_quick_learn)
+        
         # 動作 1：僅本次替換 (不存入字典)
         def replace_once(event=None):
             correct = correct_var.get().strip()
-            dialog.destroy()
+            _close_quick_learn()
             if correct:
                 self.toast(f"✅ 已替換文字為「{correct}」（未存入字典）！", is_error=False, duration=2000)
                 if on_saved:
@@ -1091,7 +1189,7 @@ class UIManager:
                     btn_replace_once.focus_set()
                     return
             
-            dialog.destroy()
+            _close_quick_learn()
             from learning_manager import add_correction
             add_correction(wrong, correct, category=chosen_cat, contexts=ctx_list)
             if ctx_list:
@@ -1102,7 +1200,7 @@ class UIManager:
                 on_saved(correct)
             
         def cancel(event=None):
-            dialog.destroy()
+            _close_quick_learn()
             
         # 鍵盤快捷鍵綁定
         dialog.bind("<Return>", replace_once)
@@ -1150,14 +1248,8 @@ class UIManager:
         self.help_win.configure(bg=self.BG_DARK)
         self.help_win.attributes("-topmost", True)
 
-        w, h = 920, 720
-        left, top, right, bottom = self._get_screen_workarea()
-        sw = right - left
-        sh = bottom - top
-        actual_w = min(w, max(750, sw - 40))
-        actual_h = min(h, max(520, sh - 60))
-        self.help_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
-        self.help_win.minsize(760, 520)
+        self._apply_saved_geometry(self.help_win, "help", default_w=920, default_h=720, min_w=760, min_h=520)
+        self._bind_geometry_saving(self.help_win, "help")
         self.help_win.resizable(True, True)  # 允許使用者自由調整視窗大小
 
         header_frame = tk.Frame(self.help_win, bg="#1a252f", pady=14)
@@ -1217,7 +1309,7 @@ class UIManager:
             help_labels.append(lbl_body)
 
         add_card(
-            "🎙️ 鍵盤右手邊 Alt 或 ~ (波浪鍵) —— 語音輸入主熱鍵 (雙模態)",
+            "🎙️ 1. 鍵盤右手邊 Alt 或 ~ (波浪鍵) —— 語音輸入主熱鍵 (雙模態)",
             "• 專為桌機與 ThinkPad/各廠筆電打造，按住 ~ 鍵或右手邊 Alt 即可錄音。\n"
             "• 底層物理吞噬：在任何搜尋列或輸入框按下，絕不印出雜字、不觸發系統選單奪焦。\n"
             "• 單擊切換 (Toggle)：按一下開始錄音，講完再按一下停止並自動貼上純文字。\n"
@@ -1226,25 +1318,20 @@ class UIManager:
             "#3498db"
         )
         add_card(
-            "🎙️ F9 鍵 —— 備用全域語音輸入 (單擊切換)",
-            "• 單擊切換 (Toggle)：適合筆電或偏好標準功能鍵者，按一下開始錄音，再按一下停止並貼上。",
-            "#1abc9c"
-        )
-        add_card(
-            "🔄 F8 或 Alt + ~ 鍵 —— 桌面全域反白選取重新修飾",
-            "• 在任何編輯器、瀏覽器或記事本中反白選取文字。\n"
-            "• 按下 F8 或 Alt + ~，AI 會自動重新潤飾語句並原地替換覆蓋。",
-            "#9b59b6"
-        )
-        add_card(
-            "✏️ Shift + F8 或 Ctrl + ~ 鍵 —— 極速糾錯教學與詞彙學習",
+            "✏️ 2. Shift + F8 或 Ctrl + ~ 鍵 —— 極速糾錯教學與詞彙學習 (重要性第二！)",
             "• 反白錯字後按 Shift+F8 或 Ctrl+~ 彈出糾錯浮窗 (筆電免 Fn)，支援雙模式：\n"
             "  - 僅本次替換：單純替換當前選取文字，不存入字典\n"
             "  - 永久學習並替換：替換文字並同步寫入專屬字典，日後自動校正",
             "#2ecc71"
         )
         add_card(
-            "⚙️ 系統匣選單 (藍色圖示按右鍵)",
+            "🔄 3. F8 或 Alt + ~ 鍵 —— 桌面全域反白選取重新修飾",
+            "• 在任何編輯器、瀏覽器或記事本中反白選取文字。\n"
+            "• 按下 F8 或 Alt + ~，AI 會自動重新潤飾語句並原地替換覆蓋。",
+            "#9b59b6"
+        )
+        add_card(
+            "⚙️ 4. 系統匣選單 (工作列右下角藍色圖示按右鍵)",
             "• 歷史紀錄 (重播音檔 / 重新辨識)   • 專屬字典管理 (支援匯入/匯出)\n"
             "• API 設定 (Groq / Gemini)        • 🔄 重新啟動 (一鍵重拉服務)",
             "#f39c12"
@@ -1267,9 +1354,21 @@ class UIManager:
 
         def on_help_close():
             try:
+                if self.help_win and self.help_win.winfo_exists() and self.help_win.state() == "normal":
+                    import config_manager
+                    config_manager.set_window_geometry("help", self.help_win.geometry())
+            except Exception:
+                pass
+            try:
                 canvas.unbind_all("<MouseWheel>")
             except Exception:
                 pass
+            if hasattr(self, '_geom_save_timer_help') and self._geom_save_timer_help:
+                try:
+                    self.root.after_cancel(self._geom_save_timer_help)
+                except Exception:
+                    pass
+                self._geom_save_timer_help = None
             self.help_win.destroy()
             self.help_win = None
 
@@ -1302,17 +1401,23 @@ class UIManager:
         self.dictionary_win.configure(bg=self.BG_DARK)
         self.dictionary_win.attributes("-topmost", True)
         
-        w, h = 1020, 680
-        left, top, right, bottom = self._get_screen_workarea()
-        sw = right - left
-        sh = bottom - top
-        actual_w = min(w, max(780, sw - 40))
-        actual_h = min(h, max(500, sh - 60))
-        self.dictionary_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
-        self.dictionary_win.minsize(840, 500)
+        self._apply_saved_geometry(self.dictionary_win, "dictionary", default_w=1020, default_h=680, min_w=840, min_h=500)
+        self._bind_geometry_saving(self.dictionary_win, "dictionary")
         self.dictionary_win.resizable(True, True)
         
         def on_close():
+            try:
+                if self.dictionary_win and self.dictionary_win.winfo_exists() and self.dictionary_win.state() == "normal":
+                    import config_manager
+                    config_manager.set_window_geometry("dictionary", self.dictionary_win.geometry())
+            except Exception:
+                pass
+            if hasattr(self, '_geom_save_timer_dictionary') and self._geom_save_timer_dictionary:
+                try:
+                    self.root.after_cancel(self._geom_save_timer_dictionary)
+                except Exception:
+                    pass
+                self._geom_save_timer_dictionary = None
             if self.dictionary_win:
                 self.dictionary_win.destroy()
                 self.dictionary_win = None

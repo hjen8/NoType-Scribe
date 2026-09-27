@@ -16,14 +16,15 @@ def load_config():
                 return {}
     return {}
 
-def save_config(config):
+def save_config(config, sync_backup=True):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
-    try:
-        from backup_manager import sync_to_backup
-        sync_to_backup()
-    except Exception:
-        pass
+    if sync_backup:
+        try:
+            from backup_manager import sync_to_backup
+            sync_to_backup()
+        except Exception:
+            pass
 
 
 def parse_keys_list(raw_keys) -> list:
@@ -147,4 +148,26 @@ def should_prompt_student_reminder(force_check_month: int = None) -> bool:
             pass
             
     return True
+    
+
+def get_window_geometry(win_name: str) -> str:
+    """取得指定視窗上次儲存的幾何尺寸與位置 (如 '1120x680+150+80')"""
+    config = load_config()
+    geoms = config.get("WINDOW_GEOMETRY", {})
+    if isinstance(geoms, dict):
+        return str(geoms.get(win_name, "")).strip()
+    return ""
+
+def set_window_geometry(win_name: str, geometry_str: str):
+    """儲存指定視窗的幾何尺寸與位置 (不觸發 Dropbox 備份同步，零磁碟與網路負擔)"""
+    if not geometry_str or not isinstance(geometry_str, str):
+        return
+    config = load_config()
+    geoms = config.get("WINDOW_GEOMETRY", {})
+    if not isinstance(geoms, dict):
+        geoms = {}
+    geoms[win_name] = geometry_str.strip()
+    config["WINDOW_GEOMETRY"] = geoms
+    save_config(config, sync_backup=False)
+
 

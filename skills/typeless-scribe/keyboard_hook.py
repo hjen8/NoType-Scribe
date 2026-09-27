@@ -29,9 +29,6 @@ def _is_right_alt(key):
 def _is_f8(key):
     return key == keyboard.Key.f8
 
-def _is_f9(key):
-    return key == keyboard.Key.f9
-
 def _is_tilde(key):
     if hasattr(key, 'vk') and key.vk == 192:
         return True
@@ -59,7 +56,6 @@ class KeyboardManager:
         self.ctrl_tilde_pressed = False
         self.alt_tilde_pressed = False
         self.f8_pressed = False
-        self.f9_pressed = False
         self.shift_pressed = False
         self.ctrl_pressed = False
         self.alt_pressed = False
@@ -641,14 +637,6 @@ class KeyboardManager:
                     else:
                         self._stop_recording_and_process(trigger_type="Toggle Click (~)")
 
-            elif _is_f9(key):
-                if not self.f9_pressed:
-                    self.f9_pressed = True
-                    if not self.is_recording:
-                        self._start_recording()
-                    else:
-                        self._stop_recording_and_process(trigger_type="Toggle Click (F9)")
-
             elif _is_right_alt(key):
                 # 若非 Windows 底層攔截環境之備援
                 if not self.alt_r_pressed:
@@ -680,8 +668,6 @@ class KeyboardManager:
                     held_duration = time.time() - down_time
                     if held_duration >= 0.6:
                         self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
-            if _is_f9(key):
-                self.f9_pressed = False
             if _is_right_alt(key):
                 down_time = getattr(self, 'alt_r_down_time', 0.0)
                 self.alt_r_pressed = False
@@ -736,10 +722,9 @@ class KeyboardManager:
         self._watchdog_thread.start()
         
         print("[Keyboard] Hotkey listener started:")
-        print("  <右手 Alt> 或 <~ 鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
-        print("  <F9>                 : 備用語音輸入 (單擊切換錄音與貼上)")
-        print("  <Shift + F8> 或 <Ctrl + ~> : 桌面反白文字極速糾錯教學與自適應學習 (筆電免 Fn)")
-        print("  <F8> 或 <Alt + ~>    : 桌面反白文字重新修飾 (筆電免 Fn)")
+        print("  1. <右手邊 Alt> 或 <~ 波浪鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
+        print("  2. <Shift + F8> 或 <Ctrl + ~> : 桌面反白文字極速糾錯教學與自適應學習 (筆電免 Fn)")
+        print("  3. <F8> 或 <Alt + ~>          : 桌面反白文字重新修飾 (筆電免 Fn)")
 
     def stop(self):
         self._watchdog_running = False
