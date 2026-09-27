@@ -97,49 +97,70 @@ class UIManager:
     def show_floating(self):
         if self.floating_win and self.floating_win.winfo_exists():
             return
+            
+        is_desktop = os.path.exists("S:\\")
         
-        self.floating_win = tk.Toplevel(self.root)
-        self.floating_win.overrideredirect(True)
-        self.floating_win.attributes("-topmost", True)
-        self.floating_win.configure(bg="#ff4757") # 醒目亮紅高質感外框
-        
-        # 內層深黑尊爵卡片容器 (加寬放大，極致清晰)
-        inner = tk.Frame(self.floating_win, bg="#181818", padx=18, pady=12)
-        inner.pack(fill="both", expand=True, padx=2, pady=2)
-        
-        # 第一行：大字麥克風與錄音狀態提示
-        row1 = tk.Frame(inner, bg="#181818")
-        row1.pack(anchor="center")
-        
-        tk.Label(
-            row1, 
-            text="🔴 正在錄音中...", 
-            font=("Microsoft JhengHei", 15, "bold"), 
-            fg="#ffffff", 
-            bg="#181818"
-        ).pack(side="left")
-        
-        # 第二行：清楚的操作提醒
-        tk.Label(
-            inner,
-            text="再按一下 ~ 鍵 停止並貼上",
-            font=("Microsoft JhengHei", 10),
-            fg="#a4b0be",
-            bg="#181818"
-        ).pack(anchor="center", pady=(5, 0))
-        
-        self.floating_win.update_idletasks()
-        w = max(260, self.floating_win.winfo_reqwidth())
-        h = max(76, self.floating_win.winfo_reqheight())
-        
-        # 精準鎖定在螢幕右下角 (嚴格依據真實可用工作區，緊靠工作列右上方)
-        left, top, right, bottom = self._get_screen_workarea()
-        margin_x = 25
-        margin_y = 20
-        x = right - w - margin_x
-        y = bottom - h - margin_y
-        
-        self.floating_win.geometry(f"{w}x{h}+{x}+{y}")
+        if is_desktop:
+            # 【主機台（桌機）專屬】：100% 保持長官最熟悉的原汁原味極簡經典小框 (150x40, #2c3e50)
+            self.floating_win = tk.Toplevel(self.root)
+            self.floating_win.overrideredirect(True)
+            self.floating_win.attributes("-topmost", True)
+            self.floating_win.configure(bg="#2c3e50")
+            
+            tk.Label(
+                self.floating_win, 
+                text="🎤 錄音中...", 
+                font=("Microsoft JhengHei", 14, "bold"), 
+                fg="white", 
+                bg="#2c3e50", 
+                padx=10, 
+                pady=5
+            ).pack()
+            
+            sw = self.floating_win.winfo_screenwidth()
+            sh = self.floating_win.winfo_screenheight()
+            w, h = 150, 40
+            self.floating_win.geometry(f"{w}x{h}+{sw-w-50}+{sh-h-100}")
+        else:
+            # 【筆電台專屬】：放大 2 倍高對比膠囊 (260x76, 15pt 粗體+指引)，以工作區錨定防縮放居中錯位
+            self.floating_win = tk.Toplevel(self.root)
+            self.floating_win.overrideredirect(True)
+            self.floating_win.attributes("-topmost", True)
+            self.floating_win.configure(bg="#ff4757") # 醒目亮紅高質感外框
+            
+            inner = tk.Frame(self.floating_win, bg="#181818", padx=18, pady=12)
+            inner.pack(fill="both", expand=True, padx=2, pady=2)
+            
+            row1 = tk.Frame(inner, bg="#181818")
+            row1.pack(anchor="center")
+            
+            tk.Label(
+                row1, 
+                text="🔴 正在錄音中...", 
+                font=("Microsoft JhengHei", 15, "bold"), 
+                fg="#ffffff", 
+                bg="#181818"
+            ).pack(side="left")
+            
+            tk.Label(
+                inner,
+                text="再按一下 ~ 鍵 停止並貼上",
+                font=("Microsoft JhengHei", 10),
+                fg="#a4b0be",
+                bg="#181818"
+            ).pack(anchor="center", pady=(5, 0))
+            
+            self.floating_win.update_idletasks()
+            w = max(260, self.floating_win.winfo_reqwidth())
+            h = max(76, self.floating_win.winfo_reqheight())
+            
+            left, top, right, bottom = self._get_screen_workarea()
+            margin_x = 25
+            margin_y = 20
+            x = right - w - margin_x
+            y = bottom - h - margin_y
+            
+            self.floating_win.geometry(f"{w}x{h}+{x}+{y}")
 
     def hide_floating(self):
         if self.floating_win:
@@ -272,6 +293,16 @@ class UIManager:
             command=self._refresh_history
         ).pack(side="right")
         
+        # 頂部全域停止播放按鈕 (播放音訊時動態顯現，長官隨時可掐斷)
+        self._header_stop_btn = tk.Button(
+            header, text=" ⏹ 停止播放 ",
+            font=("Microsoft JhengHei", 9, "bold"),
+            bg="#c0392b", fg="white",
+            activebackground="#e74c3c", activeforeground="white",
+            bd=0, padx=8, pady=2, cursor="hand2",
+            command=self._stop_audio
+        )
+        
         # 即時搜尋工具列 (Search Bar - 1-50)
         search_frame = tk.Frame(self.history_win, bg=self.BG_DARK)
         search_frame.pack(fill="x", padx=20, pady=(4, 6))
@@ -364,6 +395,7 @@ class UIManager:
         
         # 視窗關閉時解綁滾輪與取消防抖定時器
         def on_close():
+            self._stop_audio()  # 立即停止播放，杜絕視窗關閉後背景幽靈播放
             try:
                 canvas.unbind_all("<MouseWheel>")
             except Exception:
@@ -536,17 +568,29 @@ class UIManager:
         )
         copy_btn.pack(side="left", padx=2)
         
-        # 2. 重播按鈕
+        # 2. 播放按鈕 (點擊播放，播放中變換為醒目紅色 ⏹ 停止鍵)
         audio_path = rec.audio_path
+        dur_sec = getattr(rec, 'duration_sec', None)
         play_btn = tk.Button(
             btn_frame, text=" ▷ ",
             font=("Consolas", 10),
             bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground=self.BTN_HOVER, activeforeground="white",
-            bd=0, padx=4, pady=0,
-            command=lambda p=audio_path: self._play_audio(p)
+            activebackground="#c0392b", activeforeground="white",
+            bd=0, padx=4, pady=0, cursor="hand2"
         )
+        play_btn.configure(command=lambda p=audio_path, b=play_btn, d=dur_sec: self._play_audio(p, b, d))
         play_btn.pack(side="left", padx=2)
+        
+        # 2-1. 專屬停住按鈕 (長官特別指明：加一個停住鍵，隨時點擊立即掐斷)
+        stop_btn = tk.Button(
+            btn_frame, text=" ⏹ ",
+            font=("Consolas", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT,
+            activebackground="#c0392b", activeforeground="white",
+            bd=0, padx=4, pady=0, cursor="hand2",
+            command=self._stop_audio
+        )
+        stop_btn.pack(side="left", padx=2)
         
         # 3. 重新辨識按鈕
         rerun_btn = tk.Button(
@@ -710,19 +754,90 @@ class UIManager:
             bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
         ).pack(side="left", padx=10)
     
-    def _play_audio(self, audio_path):
-        if audio_path and os.path.exists(audio_path):
+    def _stop_audio(self):
+        """立即停止任何正在播放的音訊，並復原按鈕狀態"""
+        try:
+            import winsound
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except Exception:
+            pass
+        
+        # 取消自動播畢定時器
+        if hasattr(self, '_audio_timer') and self._audio_timer:
             try:
-                import winsound
-                # 優先使用 Windows 內建非同步播放，背景播放無彈窗
-                winsound.PlaySound(audio_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                self.root.after_cancel(self._audio_timer)
             except Exception:
-                try:
-                    os.startfile(audio_path)
-                except Exception as e:
-                    self.toast(f"無法播放音檔: {e}", is_error=True, duration=3000)
-        else:
+                pass
+            self._audio_timer = None
+
+        # 復原先前高亮的播放按鈕
+        if hasattr(self, '_current_playing_btn') and self._current_playing_btn:
+            try:
+                if self._current_playing_btn.winfo_exists():
+                    self._current_playing_btn.configure(
+                        text=" ▷ ",
+                        bg=self.BTN_BG,
+                        fg=self.FG_TEXT
+                    )
+            except Exception:
+                pass
+            self._current_playing_btn = None
+
+        self._current_playing_path = None
+
+        # 頂部全域停止按鈕退場
+        if hasattr(self, '_header_stop_btn') and self._header_stop_btn:
+            try:
+                if self._header_stop_btn.winfo_exists():
+                    self._header_stop_btn.pack_forget()
+            except Exception:
+                pass
+
+    def _play_audio(self, audio_path, btn=None, duration_sec=None):
+        if not audio_path or not os.path.exists(audio_path):
             self.toast("音檔不存在或已被清除", is_error=True, duration=2500)
+            return
+
+        # 如果點擊的是當前正在播放的音檔，直接切斷停住
+        if getattr(self, '_current_playing_path', None) == audio_path:
+            self._stop_audio()
+            return
+
+        # 先停止先前可能正在播放的其他音檔
+        self._stop_audio()
+
+        try:
+            import winsound
+            winsound.PlaySound(audio_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            self._current_playing_path = audio_path
+
+            # 將點擊的播放按鈕切換為鮮明紅色停止鍵
+            if btn and btn.winfo_exists():
+                btn.configure(
+                    text=" ⏹ ",
+                    bg="#c0392b",
+                    fg="white"
+                )
+                self._current_playing_btn = btn
+
+            # 頂部全域停止按鈕動態顯現
+            if hasattr(self, '_header_stop_btn') and self._header_stop_btn and self._header_stop_btn.winfo_exists():
+                self._header_stop_btn.pack(side="right", padx=(0, 8))
+
+            # 計算定時器，播放完畢後自動復原為播放圖示
+            if duration_sec:
+                try:
+                    dur_val = float(duration_sec)
+                    if dur_val > 0:
+                        ms = int(dur_val * 1000) + 300
+                        self._audio_timer = self.root.after(ms, self._stop_audio)
+                except Exception:
+                    pass
+        except Exception:
+            try:
+                os.startfile(audio_path)
+            except Exception as e:
+                self.toast(f"無法播放音檔: {e}", is_error=True, duration=3000)
     
     def _copy_text(self, text):
         if not text or not str(text).strip():
