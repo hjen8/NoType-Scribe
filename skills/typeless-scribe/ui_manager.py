@@ -568,9 +568,8 @@ class UIManager:
         )
         copy_btn.pack(side="left", padx=2)
         
-        # 2. 播放按鈕 (寶石綠 #27ae60，點擊播放並動態變身為紅色 ⏹ 停住，再按即停)
+        # 2. 播放 / 暫停按鈕 (未播/暫停為綠色 ▷ 播放，播放中變身為橘色 ⏸ 暫停，再按繼續)
         audio_path = rec.audio_path
-        dur_sec = getattr(rec, 'duration_sec', None)
         play_btn = tk.Button(
             btn_frame, text=" ▷ 播放 ",
             font=("Microsoft JhengHei", 9),
@@ -578,8 +577,19 @@ class UIManager:
             activebackground="#2ecc71", activeforeground="white",
             bd=0, padx=5, pady=1, cursor="hand2"
         )
-        play_btn.configure(command=lambda p=audio_path, b=play_btn, d=dur_sec: self._play_audio(p, b, d))
+        play_btn.configure(command=lambda p=audio_path, b=play_btn: self._play_pause_audio(p, b))
         play_btn.pack(side="left", padx=2)
+        
+        # 2-1. 專屬停住按鈕 (珊瑚深紅 #c0392b，徹底停住並放棄播放，重置進度)
+        stop_btn = tk.Button(
+            btn_frame, text=" ⏹ 停住 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#c0392b", fg="white",
+            activebackground="#e74c3c", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2",
+            command=self._stop_audio
+        )
+        stop_btn.pack(side="left", padx=2)
         
         # 3. 重新辨識按鈕 (海軍藍 #2980b9，代表 AI 重新分析)
         rerun_btn = tk.Button(
@@ -744,22 +754,24 @@ class UIManager:
         ).pack(side="left", padx=10)
     
     def _stop_audio(self):
-        """立即停止任何正在播放的音訊，並復原按鈕狀態"""
+        """真正徹底停住：停止播放並重置進度，下次從頭播放"""
+        try:
+            import ctypes
+            winmm = ctypes.windll.winmm
+            winmm.mciSendStringW('stop NoTypeHistoryAudio', None, 0, 0)
+            winmm.mciSendStringW('close NoTypeHistoryAudio', None, 0, 0)
+        except Exception:
+            pass
         try:
             import winsound
             winsound.PlaySound(None, winsound.SND_PURGE)
         except Exception:
             pass
-        
-        # 取消自動播畢定時器
-        if hasattr(self, '_audio_timer') and self._audio_timer:
-            try:
-                self.root.after_cancel(self._audio_timer)
-            except Exception:
-                pass
-            self._audio_timer = None
+            
+        self._audio_state = "stopped"
+        self._audio_monitor_active = False
 
-        # 復原先前高亮的播放按鈕
+        # 復原先前高亮的播放按鈕為綠色 ▷ 播放
         if hasattr(self, '_current_playing_btn') and self._current_playing_btn:
             try:
                 if self._current_playing_btn.winfo_exists():
@@ -782,51 +794,97 @@ class UIManager:
             except Exception:
                 pass
 
-    def _play_audio(self, audio_path, btn=None, duration_sec=None):
+    def _play_pause_audio(self, audio_path, btn=None):
+        """播放 / 暫停雙模態切換：未播放點擊播放並變身橘色暫停鍵，點擊暫停，再點繼續播放"""
         if not audio_path or not os.path.exists(audio_path):
             self.toast("音檔不存在或已被清除", is_error=True, duration=2500)
             return
 
-        # 如果點擊的是當前正在播放的音檔，直接切斷停住
-        if getattr(self, '_current_playing_path', None) == audio_path:
-            self._stop_audio()
+        import ctypes
+        winmm = ctypes.windll.winmm
+        alias = "NoTypeHistoryAudio"
+
+        # 情況 1：點擊當前正在播放的音檔 -> 暫停 (Pause)
+        if getattr(self, '_current_playing_path', None) == audio_path and getattr(self, '_audio_state', None) == "playing":
+            winmm.mciSendStringW(f'pause {alias}', None, 0, 0)
+            self._audio_state = "paused"
+            if btn and btn.winfo_exists():
+                btn.configure(
+                    text=" ▷ 播放 ",
+                    bg="#27ae60",
+                    fg="white"
+                )
             return
 
-        # 先停止先前可能正在播放的其他音檔
+        # 情況 2：點擊當前處於暫停中的音檔 -> 繼續播放 (Resume)
+        if getattr(self, '_current_playing_path', None) == audio_path and getattr(self, '_audio_state', None) == "paused":
+            winmm.mciSendStringW(f'resume {alias}', None, 0, 0)
+            self._audio_state = "playing"
+            if btn and btn.winfo_exists():
+                btn.configure(
+                    text=" ⏸ 暫停 ",
+                    bg="#d35400",
+                    fg="white"
+                )
+            self._start_audio_monitor()
+            return
+
+        # 情況 3：點擊全新音檔或先前已完全停住 -> 從頭播放 (Play from start)
         self._stop_audio()
 
         try:
-            import winsound
-            winsound.PlaySound(audio_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            winmm.mciSendStringW(f'close {alias}', None, 0, 0)
+            ret = winmm.mciSendStringW(f'open "{audio_path}" type waveaudio alias {alias}', None, 0, 0)
+            if ret != 0:
+                os.startfile(audio_path)
+                return
+            winmm.mciSendStringW(f'play {alias}', None, 0, 0)
+            self._audio_state = "playing"
             self._current_playing_path = audio_path
+            self._current_playing_btn = btn
 
-            # 將點擊的播放按鈕切換為鮮明紅色停止鍵
+            # 播放按鈕切換為醒目橘色「⏸ 暫停」
             if btn and btn.winfo_exists():
                 btn.configure(
-                    text=" ⏹ 停住 ",
-                    bg="#c0392b",
+                    text=" ⏸ 暫停 ",
+                    bg="#d35400",
                     fg="white"
                 )
-                self._current_playing_btn = btn
 
             # 頂部全域停止按鈕動態顯現
             if hasattr(self, '_header_stop_btn') and self._header_stop_btn and self._header_stop_btn.winfo_exists():
                 self._header_stop_btn.pack(side="right", padx=(0, 8))
 
-            # 計算定時器，播放完畢後自動復原為播放圖示
-            if duration_sec:
-                try:
-                    dur_val = float(duration_sec)
-                    if dur_val > 0:
-                        ms = int(dur_val * 1000) + 300
-                        self._audio_timer = self.root.after(ms, self._stop_audio)
-                except Exception:
-                    pass
+            self._start_audio_monitor()
+        except Exception as e:
+            self.toast(f"無法播放音檔: {e}", is_error=True, duration=3000)
+
+    def _play_audio(self, audio_path, btn=None, duration_sec=None):
+        """相容性別名：呼叫 _play_pause_audio"""
+        self._play_pause_audio(audio_path, btn=btn)
+
+    def _start_audio_monitor(self):
+        if getattr(self, '_audio_monitor_active', False):
+            return
+        self._audio_monitor_active = True
+        self._check_audio_loop()
+
+    def _check_audio_loop(self):
+        if getattr(self, '_audio_state', None) != "playing":
+            self._audio_monitor_active = False
+            return
+        try:
+            import ctypes
+            winmm = ctypes.windll.winmm
+            buf = ctypes.create_unicode_buffer(64)
+            winmm.mciSendStringW('status NoTypeHistoryAudio mode', buf, 64, 0)
+            if buf.value.lower() == 'stopped':
+                self._audio_monitor_active = False
+                self._stop_audio()
+                return
         except Exception:
-            try:
-                os.startfile(audio_path)
-            except Exception as e:
-                self.toast(f"無法播放音檔: {e}", is_error=True, duration=3000)
+            pass
+        self.root.after(250, self._check_audio_loop)
     
     def _copy_text(self, text):
         if not text or not str(text).strip():
