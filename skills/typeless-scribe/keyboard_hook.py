@@ -476,6 +476,7 @@ class KeyboardManager:
         threading.Thread(target=_stop_worker, daemon=True).start()
 
     def _win32_filter(self, msg, data):
+        should_suppress = False
         try:
             # 1. 支援波浪鍵 ~ (VK_OEM_3 = 192)，單鍵雙模態 (單擊 Toggle / 長按放開)，特別適用於 ThinkPad 與各廠筆電
             if data.vkCode == 192:
@@ -504,37 +505,40 @@ class KeyboardManager:
                         held_duration = time.time() - down_time
                         if held_duration >= 0.6:
                             self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
-                # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號
-                if self.listener:
-                    self.listener.suppress_event()
-                return False
+                should_suppress = True
 
             # 2. 165 is VK_RMENU (Right Alt)，擴充支援 ThinkPad/筆電 extended VK_MENU (18)
-            is_right_alt_vk = (data.vkCode == 165) or (data.vkCode == 18 and (data.flags & 1))
-            if is_right_alt_vk:
-                if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
-                    if not self.alt_r_pressed:
-                        self.alt_r_pressed = True
-                        self.alt_r_down_time = time.time()
-                        if not self.is_recording:
-                            self._start_recording()
-                        else:
-                            self._stop_recording_and_process(trigger_type="Toggle Click (Right Alt)")
-                elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
-                    down_time = getattr(self, 'alt_r_down_time', 0.0)
-                    self.alt_r_pressed = False
-                    self.alt_r_down_time = 0.0
-                    if self.is_recording and down_time > 0:
-                        held_duration = time.time() - down_time
-                        if held_duration >= 0.6:
-                            self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (Right Alt) {held_duration:.1f}s")
-                # 物理吞噬此事件，向 Windows 回傳 1，徹底杜絕 SC_KEYMENU 系統選單奪焦
-                if self.listener:
-                    self.listener.suppress_event()
-                return False
+            else:
+                is_right_alt_vk = (data.vkCode == 165) or (data.vkCode == 18 and (data.flags & 1))
+                if is_right_alt_vk:
+                    if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                        if not self.alt_r_pressed:
+                            self.alt_r_pressed = True
+                            self.alt_r_down_time = time.time()
+                            if not self.is_recording:
+                                self._start_recording()
+                            else:
+                                self._stop_recording_and_process(trigger_type="Toggle Click (Right Alt)")
+                    elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                        down_time = getattr(self, 'alt_r_down_time', 0.0)
+                        self.alt_r_pressed = False
+                        self.alt_r_down_time = 0.0
+                        if self.is_recording and down_time > 0:
+                            held_duration = time.time() - down_time
+                            if held_duration >= 0.6:
+                                self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (Right Alt) {held_duration:.1f}s")
+                    should_suppress = True
         except Exception as e:
-            safe_print(f"[_win32_filter Error] {e}")
+            import traceback
+            safe_print(f"[_win32_filter Error] {traceback.format_exc()}")
             return True
+
+        if should_suppress:
+            # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號且徹底杜絕 SC_KEYMENU 系統選單奪焦
+            if self.listener:
+                self.listener.suppress_event()
+            return False
+
         return True
 
     def on_press(self, key):
