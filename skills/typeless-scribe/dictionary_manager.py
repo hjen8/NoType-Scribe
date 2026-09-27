@@ -142,19 +142,15 @@ def save_hierarchy_to_file(hierarchy: list[dict], filepath: str) -> bool:
         return False
 
 def save_hierarchy(hierarchy: list[dict]) -> bool:
-    """將階層結構格式化寫入本地 dictionary.txt，並觸發雙向鏡像同步"""
+    """將階層結構格式化寫入本地 dictionary.txt，並立即鏡像推送至雲端"""
     ensure_dictionary_file()
     success = save_hierarchy_to_file(hierarchy, DICTIONARY_FILE)
     if success:
         try:
-            from backup_manager import sync_bidirectional
-            sync_bidirectional()
+            from backup_manager import push_to_backup
+            push_to_backup("dictionary.txt")
         except Exception:
-            try:
-                from backup_manager import sync_to_backup
-                sync_to_backup()
-            except Exception:
-                pass
+            pass
     return success
 
 def merge_hierarchies(h_base: list[dict], h_other: list[dict]) -> tuple[list[dict], bool]:

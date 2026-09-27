@@ -71,76 +71,72 @@ def merge_corrections(corr_local: dict, corr_cloud: dict) -> tuple[dict, bool, b
     return merged, changed_local, changed_cloud
 
 
+def push_to_backup(filename: str = None) -> bool:
+    """本機主動修改時，立即單向鏡像推送至雲端備份（確保刪除、新增、更名秒級寫入雲端）"""
+    backup_dir = get_backup_dir()
+    if not backup_dir:
+        return False
+    targets = [filename] if filename else ["dictionary.txt", "corrections.json"]
+    success = False
+    for fn in targets:
+        src = os.path.join(BASE_DIR, fn)
+        dst = os.path.join(backup_dir, fn)
+        if os.path.exists(src):
+            try:
+                shutil.copy2(src, dst)
+                success = True
+            except Exception as e:
+                print(f"[Backup] 推送 {fn} 失敗: {e}")
+    return success
+
+
+def _sync_file_by_mtime(local_path: str, cloud_path: str, label: str):
+    """依據檔案修改時間 (mtime) 進行精準雙向同步 (確保刪除、修改、重新命名 100% 雙向生效不復活)"""
+    if os.path.exists(cloud_path) and not os.path.exists(local_path):
+        shutil.copy2(cloud_path, local_path)
+        print(f"[Sync] 本地缺少 {label}，已從雲端完全還原！")
+        return
+    if os.path.exists(local_path) and not os.path.exists(cloud_path):
+        shutil.copy2(local_path, cloud_path)
+        print(f"[Sync] 雲端缺少 {label}，已鏡像上傳本地檔案！")
+        return
+    if os.path.exists(local_path) and os.path.exists(cloud_path):
+        local_mtime = os.path.getmtime(local_path)
+        cloud_mtime = os.path.getmtime(cloud_path)
+        
+        # 門檻設為 1.0 秒
+        if cloud_mtime > local_mtime + 1.0:
+            shutil.copy2(cloud_path, local_path)
+            print(f"[Sync] 雲端 {label} 較新，已自動拉取更新至本地！")
+        elif local_mtime > cloud_mtime + 1.0:
+            shutil.copy2(local_path, cloud_path)
+            print(f"[Sync] 本地 {label} 較新，已自動推送更新至雲端！")
+
+
 def sync_bidirectional() -> bool:
     """
-    NoType 雙向智慧同步核心管線 (Smart Bidirectional Sync)：
-    1. 對 dictionary.txt 實施階層式智慧合併 (merge_hierarchies)，雙機新增詞彙 100% 聯集保全，絕不互相覆蓋抹除！
-    2. 對 corrections.json 實施映射規則智慧合併，筆電與桌機學習的同音錯字雙向共享。
-    3. 對 config.json 實施遺失自癒恢復（若本地遺失則還原，但不跨機盲目覆蓋硬體設備設定）。
-    4. 同步完成後自動更新雙端檔案與 backup_info.txt。
+    NoType 雙向時間戳精準同步核心管線 (Timestamp-Based Bidirectional Sync)：
+    1. 對 dictionary.txt 與 corrections.json 比對修改時間 (mtime)：
+       - 若雲端更新：從雲端拉取至本地 (Pull)
+       - 若本地更新：從本地推送至雲端 (Push)
+       - 徹底解決純聯集合併 (Union Merge) 導致「刪除字詞無法消除、反覆復活」的重大缺陷！
+    2. 對 config.json 實施遺失自癒恢復（若本地遺失則還原，但不跨機盲目覆蓋硬體設備設定）。
+    3. 同步完成後自動更新 backup_info.txt。
     """
     backup_dir = get_backup_dir()
     if not backup_dir:
         return False
 
     try:
-        import dictionary_manager
-        
-        # 1. 字典 dictionary.txt 智慧合併同步
+        # 1. 字典 dictionary.txt 時間戳雙向同步
         local_dict = os.path.join(BASE_DIR, "dictionary.txt")
         cloud_dict = os.path.join(backup_dir, "dictionary.txt")
-        
-        if os.path.exists(cloud_dict) and not os.path.exists(local_dict):
-            shutil.copy2(cloud_dict, local_dict)
-            print("[Sync] 本地缺少字典，已從雲端完全還原！")
-        elif os.path.exists(local_dict) and not os.path.exists(cloud_dict):
-            shutil.copy2(local_dict, cloud_dict)
-            print("[Sync] 雲端缺少字典，已鏡像上傳本地字典！")
-        elif os.path.exists(local_dict) and os.path.exists(cloud_dict):
-            h_local = dictionary_manager.load_hierarchy_from_file(local_dict)
-            h_cloud = dictionary_manager.load_hierarchy_from_file(cloud_dict)
-            
-            merged_h, local_changed = dictionary_manager.merge_hierarchies(h_local, h_cloud)
-            _, cloud_changed = dictionary_manager.merge_hierarchies(h_cloud, h_local)
-            
-            if local_changed:
-                dictionary_manager.save_hierarchy_to_file(merged_h, local_dict)
-                print(f"[Sync] 智慧合併雲端詞彙至本地字典 ({len(dictionary_manager.load_words())} 詞)！")
-            if cloud_changed or local_changed:
-                dictionary_manager.save_hierarchy_to_file(merged_h, cloud_dict)
-                print(f"[Sync] 智慧同步合併字典至 Dropbox ({len(merged_h)} 分類)！")
+        _sync_file_by_mtime(local_dict, cloud_dict, "dictionary.txt")
 
-        # 2. 自癒修正 corrections.json 智慧合併同步
+        # 2. 自癒修正 corrections.json 時間戳雙向同步
         local_corr_path = os.path.join(BASE_DIR, "corrections.json")
         cloud_corr_path = os.path.join(backup_dir, "corrections.json")
-        
-        if os.path.exists(cloud_corr_path) and not os.path.exists(local_corr_path):
-            shutil.copy2(cloud_corr_path, local_corr_path)
-            print("[Sync] 本地缺少自癒修正檔，已從雲端完全還原！")
-        elif os.path.exists(local_corr_path) and not os.path.exists(cloud_corr_path):
-            shutil.copy2(local_corr_path, cloud_corr_path)
-            print("[Sync] 雲端缺少自癒修正檔，已鏡像上傳本地檔案！")
-        elif os.path.exists(local_corr_path) and os.path.exists(cloud_corr_path):
-            try:
-                with open(local_corr_path, "r", encoding="utf-8") as f:
-                    local_c = json.load(f)
-            except Exception:
-                local_c = {}
-            try:
-                with open(cloud_corr_path, "r", encoding="utf-8") as f:
-                    cloud_c = json.load(f)
-            except Exception:
-                cloud_c = {}
-                
-            merged_c, l_chg, c_chg = merge_corrections(local_c, cloud_c)
-            if l_chg:
-                with open(local_corr_path, "w", encoding="utf-8") as f:
-                    json.dump(merged_c, f, ensure_ascii=False, indent=4)
-                print(f"[Sync] 已合併雲端修正規則至本地 ({len(merged_c)} 條)！")
-            if c_chg or l_chg:
-                with open(cloud_corr_path, "w", encoding="utf-8") as f:
-                    json.dump(merged_c, f, ensure_ascii=False, indent=4)
-                print(f"[Sync] 已同步合併修正規則至 Dropbox ({len(merged_c)} 條)！")
+        _sync_file_by_mtime(local_corr_path, cloud_corr_path, "corrections.json")
 
         # 3. 設定檔 config.json 單向遺失救援 (不盲目跨機覆蓋硬體設備參數)
         local_cfg = os.path.join(BASE_DIR, "config.json")
@@ -157,7 +153,7 @@ def sync_bidirectional() -> bool:
         try:
             with open(info_file, "w", encoding="utf-8") as f:
                 f.write(f"NoType 最新雙向同步時間: {now_str}\n")
-                f.write(f"同步項目: dictionary.txt (智慧合併), corrections.json (智慧合併), config.json (遺失救援)\n")
+                f.write(f"同步模式: 時間戳精準雙向同步 (dictionary.txt, corrections.json, config.json)\n")
         except Exception:
             pass
         return True
