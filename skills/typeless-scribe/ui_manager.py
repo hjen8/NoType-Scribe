@@ -260,11 +260,11 @@ class UIManager:
         self.history_win.configure(bg=self.BG_DARK)
         self.history_win.attributes("-topmost", True)
         
-        win_w, win_h = 740, 540
+        win_w, win_h = 800, 560
         sw = self.history_win.winfo_screenwidth()
         sh = self.history_win.winfo_screenheight()
         self.history_win.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
-        self.history_win.minsize(600, 400)
+        self.history_win.minsize(750, 450)
         
         # 標題列
         header = tk.Frame(self.history_win, bg=self.BG_DARK)
@@ -555,61 +555,61 @@ class UIManager:
             fg=self.FG_DIM, bg=self.BG_CARD
         ).pack(side="left", padx=(0, 10))
         
-        # 1. 複製按鈕 (最高頻使用，置於最左側)：所見即所得，優先取修飾文字，若無則取逐字稿
+        # 1. 複製按鈕 (深鋼青藍 #34495e，沉穩好讀)
         text_to_copy = (rec.refined_text.strip() if (rec.refined_text and rec.refined_text.strip()) 
                         else (rec.raw_text.strip() if rec.raw_text else ""))
         copy_btn = tk.Button(
-            btn_frame, text=" 📋 ",
-            font=("Segoe UI Emoji", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground=self.BTN_HOVER, activeforeground="white",
-            bd=0, padx=4, pady=0,
+            btn_frame, text=" 📋 複製 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#34495e", fg="white",
+            activebackground="#415b76", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2",
             command=lambda t=text_to_copy: self._copy_text(t)
         )
         copy_btn.pack(side="left", padx=2)
         
-        # 2. 播放按鈕 (點擊播放，播放中變換為醒目紅色 ⏹ 停止鍵)
+        # 2. 播放按鈕 (寶石綠 #27ae60，代表播放/Play)
         audio_path = rec.audio_path
         dur_sec = getattr(rec, 'duration_sec', None)
         play_btn = tk.Button(
-            btn_frame, text=" ▷ ",
-            font=("Consolas", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground="#c0392b", activeforeground="white",
-            bd=0, padx=4, pady=0, cursor="hand2"
+            btn_frame, text=" ▷ 播放 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#27ae60", fg="white",
+            activebackground="#2ecc71", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2"
         )
         play_btn.configure(command=lambda p=audio_path, b=play_btn, d=dur_sec: self._play_audio(p, b, d))
         play_btn.pack(side="left", padx=2)
         
-        # 2-1. 專屬停住按鈕 (長官特別指明：加一個停住鍵，隨時點擊立即掐斷)
+        # 2-1. 專屬停住按鈕 (珊瑚深紅 #c0392b，代表停止/Stop)
         stop_btn = tk.Button(
-            btn_frame, text=" ⏹ ",
-            font=("Consolas", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground="#c0392b", activeforeground="white",
-            bd=0, padx=4, pady=0, cursor="hand2",
+            btn_frame, text=" ⏹ 停住 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#c0392b", fg="white",
+            activebackground="#e74c3c", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2",
             command=self._stop_audio
         )
         stop_btn.pack(side="left", padx=2)
         
-        # 3. 重新辨識按鈕
+        # 3. 重新辨識按鈕 (海軍藍 #2980b9，代表 AI 重新分析)
         rerun_btn = tk.Button(
-            btn_frame, text=" 🔄 ",
-            font=("Segoe UI Emoji", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground=self.BTN_HOVER, activeforeground="white",
-            bd=0, padx=4, pady=0,
+            btn_frame, text=" 🔄 重新辨識 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#2980b9", fg="white",
+            activebackground="#3498db", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2",
             command=lambda r=rec: self._reprocess_record(r)
         )
         rerun_btn.pack(side="left", padx=2)
         
-        # 4. 糾錯學習按鈕
+        # 4. 糾錯學習按鈕 (暖陽橘 #d35400，代表編輯/教學)
         edit_btn = tk.Button(
-            btn_frame, text=" ✏️ ",
-            font=("Segoe UI Emoji", 10),
-            bg=self.BTN_BG, fg=self.FG_TEXT,
-            activebackground=self.BTN_HOVER, activeforeground="white",
-            bd=0, padx=4, pady=0,
+            btn_frame, text=" ✏️ 糾錯 ",
+            font=("Microsoft JhengHei", 9),
+            bg="#d35400", fg="white",
+            activebackground="#e67e22", activeforeground="white",
+            bd=0, padx=5, pady=1, cursor="hand2",
             command=lambda r=rec: self._open_correction_dialog(r)
         )
         edit_btn.pack(side="left", padx=2)
@@ -775,9 +775,9 @@ class UIManager:
             try:
                 if self._current_playing_btn.winfo_exists():
                     self._current_playing_btn.configure(
-                        text=" ▷ ",
-                        bg=self.BTN_BG,
-                        fg=self.FG_TEXT
+                        text=" ▷ 播放 ",
+                        bg="#27ae60",
+                        fg="white"
                     )
             except Exception:
                 pass
@@ -814,7 +814,7 @@ class UIManager:
             # 將點擊的播放按鈕切換為鮮明紅色停止鍵
             if btn and btn.winfo_exists():
                 btn.configure(
-                    text=" ⏹ ",
+                    text=" ⏹ 停住 ",
                     bg="#c0392b",
                     fg="white"
                 )
