@@ -48,6 +48,7 @@ class KeyboardManager:
         self.target_hwnd = None
         self.app_context = None
         self.power_monitor = PowerMonitor(on_resume=self._on_system_resume)
+        self.timeout_timer = None
 
     def _on_system_resume(self, reason: str):
         safe_print(f"[Power] Audio stream reconnect triggered by {reason}...")
@@ -398,12 +399,42 @@ class KeyboardManager:
         
         print(f"\n[REC] Recording started... (Active App: {self.app_context['name']} | Mode: {self.app_context['mode']})")
         ui.msg_queue.put('show_floating')
+        
+        # 啟動 120 秒單次錄音超時防忘安全定時器 (1-52)
+        if self.timeout_timer:
+            try:
+                self.timeout_timer.cancel()
+            except Exception:
+                pass
+        self.timeout_timer = threading.Timer(120.0, self._on_recording_timeout)
+        self.timeout_timer.daemon = True
+        self.timeout_timer.start()
+        
         self.recorder.start_recording()
+
+    def _on_recording_timeout(self):
+        """單次錄音達 120 秒上限時自動觸發安全截斷與處理 (1-52)"""
+        if self.is_recording:
+            safe_print("[Timeout Guard] ⏳ 單次錄音已達 120 秒上限，自動觸發安全截斷...")
+            try:
+                ui.toast("⏳ 單次錄音已達 120 秒上限，已自動停止並處理！", is_error=False, duration=3500)
+            except Exception as e:
+                safe_print(f"[Timeout Guard] UI toast error: {e}")
+            self._stop_recording_and_process(trigger_type="Timeout Guard (120s)")
 
     def _stop_recording_and_process(self, trigger_type="Toggle"):
         if not self.is_recording:
             return
         self.is_recording = False
+        
+        # 錄音正常停止，立即取消超時定時器
+        if self.timeout_timer:
+            try:
+                self.timeout_timer.cancel()
+            except Exception:
+                pass
+            self.timeout_timer = None
+            
         print(f"[REC] Recording stopped ({trigger_type}), processing...")
         ui.msg_queue.put('hide_floating')
         file_path, duration_sec = self.recorder.stop_recording()

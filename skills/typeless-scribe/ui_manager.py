@@ -186,7 +186,7 @@ class UIManager:
         self.history_win.configure(bg=self.BG_DARK)
         self.history_win.attributes("-topmost", True)
         
-        win_w, win_h = 720, 520
+        win_w, win_h = 740, 540
         sw = self.history_win.winfo_screenwidth()
         sh = self.history_win.winfo_screenheight()
         self.history_win.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
@@ -194,7 +194,7 @@ class UIManager:
         
         # 標題列
         header = tk.Frame(self.history_win, bg=self.BG_DARK)
-        header.pack(fill="x", padx=20, pady=(15, 5))
+        header.pack(fill="x", padx=20, pady=(15, 4))
         
         tk.Label(
             header, text="歷史紀錄", 
@@ -218,6 +218,57 @@ class UIManager:
             bd=0, padx=8, pady=2,
             command=self._refresh_history
         ).pack(side="right")
+        
+        # 即時搜尋工具列 (Search Bar - 1-50)
+        search_frame = tk.Frame(self.history_win, bg=self.BG_DARK)
+        search_frame.pack(fill="x", padx=20, pady=(4, 6))
+        
+        search_box = tk.Frame(search_frame, bg="#2a2a2a", bd=1, relief="solid")
+        search_box.pack(fill="x")
+        
+        tk.Label(
+            search_box, text=" 🔍 ",
+            font=("Segoe UI Emoji", 10),
+            fg=self.FG_DIM, bg="#2a2a2a"
+        ).pack(side="left", padx=(6, 0))
+        
+        self._history_search_var = tk.StringVar()
+        self._history_search_placeholder = "搜尋歷史紀錄內容、逐字稿或時間..."
+        
+        self._history_search_entry = tk.Entry(
+            search_box,
+            textvariable=self._history_search_var,
+            font=("Microsoft JhengHei", 10),
+            bg="#2a2a2a", fg=self.FG_DIM,
+            insertbackground="white", bd=0, relief="flat"
+        )
+        self._history_search_entry.insert(0, self._history_search_placeholder)
+        self._history_search_entry.pack(side="left", fill="x", expand=True, ipady=4, padx=(2, 4))
+        
+        def _on_search_focus_in(event):
+            if self._history_search_entry.get() == self._history_search_placeholder:
+                self._history_search_entry.delete(0, tk.END)
+                self._history_search_entry.configure(fg=self.FG_TEXT)
+                
+        def _on_search_focus_out(event):
+            if not self._history_search_entry.get().strip():
+                self._history_search_entry.insert(0, self._history_search_placeholder)
+                self._history_search_entry.configure(fg=self.FG_DIM)
+                
+        self._history_search_entry.bind("<FocusIn>", _on_search_focus_in)
+        self._history_search_entry.bind("<FocusOut>", _on_search_focus_out)
+        self._history_search_entry.bind("<KeyRelease>", lambda e: self._on_history_search_change())
+        
+        # 一鍵清除按鈕
+        self._history_clear_btn = tk.Button(
+            search_box, text=" ✕ ",
+            font=("Microsoft JhengHei", 9),
+            bg="#2a2a2a", fg=self.FG_DIM,
+            activebackground="#3a3a3a", activeforeground="white",
+            bd=0, padx=6, pady=2, cursor="hand2",
+            command=self._clear_history_search
+        )
+        self._history_clear_btn.pack(side="right", padx=(0, 4))
         
         # 分隔線
         tk.Frame(self.history_win, bg="#444444", height=1).pack(fill="x", padx=20, pady=(5, 0))
@@ -260,8 +311,26 @@ class UIManager:
         self.history_win.protocol("WM_DELETE_WINDOW", on_close)
         
         self._refresh_history()
+
+    def _get_current_search_query(self) -> str:
+        if hasattr(self, '_history_search_entry') and self._history_search_entry.winfo_exists():
+            txt = self._history_search_var.get().strip()
+            if txt and txt != getattr(self, '_history_search_placeholder', ''):
+                return txt
+        return ""
+
+    def _clear_history_search(self):
+        if hasattr(self, '_history_search_entry') and self._history_search_entry.winfo_exists():
+            self._history_search_entry.delete(0, tk.END)
+            self._history_search_entry.insert(0, self._history_search_placeholder)
+            self._history_search_entry.configure(fg=self.FG_DIM)
+            self._refresh_history(filter_query="")
+
+    def _on_history_search_change(self):
+        query = self._get_current_search_query()
+        self._refresh_history(filter_query=query)
     
-    def _refresh_history(self):
+    def _refresh_history(self, filter_query=None):
         from history_manager import get_all, get_count
         
         if not self.history_win or not self.history_win.winfo_exists():
@@ -272,20 +341,46 @@ class UIManager:
             widget.destroy()
         
         records = get_all()
-        count = get_count()
-        self._history_count_label.config(text=f"共 {count} 筆")
+        total_count = get_count()
         
-        if not records:
-            tk.Label(
-                self._history_frame, 
-                text="\n\n  按下 <右側 Alt> 開始錄音，歷史紀錄將在此顯示  \n\n",
-                font=("Microsoft JhengHei", 11),
-                fg=self.FG_DIM, bg=self.BG_DARK
-            ).pack(pady=60)
+        if filter_query is None:
+            filter_query = self._get_current_search_query()
+            
+        query = filter_query.strip().lower()
+        if query:
+            filtered_records = [
+                rec for rec in records
+                if (query in (rec.refined_text or "").lower() or
+                    query in (rec.raw_text or "").lower() or
+                    query in (rec.timestamp or "").lower())
+            ]
+            self._history_count_label.config(text=f"共 {len(filtered_records)} / {total_count} 筆")
+        else:
+            filtered_records = records
+            self._history_count_label.config(text=f"共 {total_count} 筆")
+        
+        if not filtered_records:
+            if query:
+                tk.Label(
+                    self._history_frame, 
+                    text=f"\n\n  🔍 查無包含「{query}」的歷史紀錄  \n\n",
+                    font=("Microsoft JhengHei", 11),
+                    fg=self.FG_DIM, bg=self.BG_DARK
+                ).pack(pady=60)
+            else:
+                tk.Label(
+                    self._history_frame, 
+                    text="\n\n  按下 <右側 Alt> 開始錄音，歷史紀錄將在此顯示  \n\n",
+                    font=("Microsoft JhengHei", 11),
+                    fg=self.FG_DIM, bg=self.BG_DARK
+                ).pack(pady=60)
             return
         
-        for rec in records:
+        for rec in filtered_records:
             self._create_history_card(rec)
+            
+        if hasattr(self, '_history_canvas') and self._history_canvas.winfo_exists():
+            self._history_canvas.yview_moveto(0)
     
     def _create_history_card(self, rec):
         card = tk.Frame(self._history_frame, bg=self.BG_CARD, padx=12, pady=10)
