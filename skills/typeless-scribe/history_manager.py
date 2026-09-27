@@ -9,31 +9,43 @@ import time as _time
 from datetime import datetime
 
 MAX_RECORDS = 1000
-AUDIO_DIR = r"S:\NoType_Audio"
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
 
+def get_audio_dir():
+    r"""優先使用 S:\NoType_Audio (RAMDISK 快取)，若無 S 槽 (如一般筆電) 則自適應降級至 %TEMP%\NoType_Audio"""
+    if os.path.exists("S:\\"):
+        return r"S:\NoType_Audio"
+    
+    # 筆電或一般電腦無 S 槽時，使用系統暫存目錄 (關機/重啟會自動釋放空間，具備相同防累積特性)
+    temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
+    return os.path.join(temp_dir, "NoType_Audio")
+
 def ensure_audio_dir():
-    r"""確保 S:\NoType_Audio 目錄存在並自動設定為隱藏資料夾 (+h)"""
-    if not os.path.exists(AUDIO_DIR):
+    """確保音檔快取目錄存在並設定為隱藏資料夾 (+h)"""
+    audio_dir = get_audio_dir()
+    if not os.path.exists(audio_dir):
         try:
-            os.makedirs(AUDIO_DIR, exist_ok=True)
-        except Exception:
-            pass
-    if os.path.exists(AUDIO_DIR):
+            os.makedirs(audio_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[Audio] Failed to make audio dir {audio_dir}: {e}")
+            
+    if os.path.exists(audio_dir):
         try:
             import ctypes
-            # FILE_ATTRIBUTE_HIDDEN = 0x02
-            attrs = ctypes.windll.kernel32.GetFileAttributesW(AUDIO_DIR)
-            if attrs != -1 and not (attrs & 2):
-                ctypes.windll.kernel32.SetFileAttributesW(AUDIO_DIR, attrs | 2)
+            # 若為 S 槽，設為隱藏資料夾 (+h)
+            if audio_dir.upper().startswith("S:"):
+                attrs = ctypes.windll.kernel32.GetFileAttributesW(audio_dir)
+                if attrs != -1 and not (attrs & 2):
+                    ctypes.windll.kernel32.SetFileAttributesW(audio_dir, attrs | 2)
         except Exception:
             pass
+    return audio_dir
 
 def generate_audio_filename():
     """產生帶時間戳的音檔名，例如 20260920_123500.wav"""
-    ensure_audio_dir()
+    audio_dir = ensure_audio_dir()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(AUDIO_DIR, f"{ts}.wav")
+    return os.path.join(audio_dir, f"{ts}.wav")
 
 class HistoryRecord:
     __slots__ = ('timestamp', 'duration_sec', 'status', 'raw_text', 'refined_text', 'audio_path', 'error_msg')

@@ -117,8 +117,21 @@ class AudioRecorder:
             print(f"[Audio] Volume too low (RMS={rms:.4f}), ignored.")
             return None, 0
         
-        # 儲存到 S:\NoType_Audio\ 帶時間戳
+        # 儲存到音檔快取目錄 (帶時間戳)
         output_path = generate_audio_filename()
-        sf.write(output_path, audio_data, self.samplerate)
+        try:
+            sf.write(output_path, audio_data, self.samplerate)
+        except Exception as e:
+            print(f"[Audio] Warning: Failed to write to {output_path} ({e}), falling back to local fallback...")
+            try:
+                import os
+                fallback_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_audio")
+                os.makedirs(fallback_dir, exist_ok=True)
+                output_path = os.path.join(fallback_dir, f"temp_{int(_time.time())}.wav")
+                sf.write(output_path, audio_data, self.samplerate)
+            except Exception as e2:
+                print(f"[Audio] Critical: Audio write failed completely ({e2})")
+                return None, 0
+
         print(f"[Audio] Recorded {duration:.1f}s (RMS={rms:.4f}) -> {output_path}")
         return output_path, round(duration, 1)

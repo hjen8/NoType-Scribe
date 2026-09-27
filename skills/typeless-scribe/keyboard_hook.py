@@ -447,8 +447,11 @@ class KeyboardManager:
             self.timeout_timer = None
             
         print(f"[REC] Recording stopped ({trigger_type}), processing...")
-        ui.msg_queue.put('hide_floating')
-        file_path, duration_sec = self.recorder.stop_recording()
+        try:
+            file_path, duration_sec = self.recorder.stop_recording()
+        except Exception as e:
+            print(f"[REC] Exception in stop_recording: {e}")
+            file_path, duration_sec = None, 0
         
         if file_path:
             threading.Thread(
