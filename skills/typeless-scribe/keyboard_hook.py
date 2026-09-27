@@ -32,6 +32,13 @@ def _is_f8(key):
 def _is_f9(key):
     return key == keyboard.Key.f9
 
+def _is_tilde(key):
+    if hasattr(key, 'vk') and key.vk == 192:
+        return True
+    if hasattr(key, 'char') and key.char in ('`', '~'):
+        return True
+    return False
+
 def _is_shift(key):
     return key in {keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r}
 
@@ -41,6 +48,8 @@ class KeyboardManager:
         self.is_recording = False
         self.alt_r_pressed = False
         self.alt_r_down_time = 0.0
+        self.tilde_pressed = False
+        self.tilde_down_time = 0.0
         self.f8_pressed = False
         self.f9_pressed = False
         self.shift_pressed = False
@@ -449,8 +458,40 @@ class KeyboardManager:
             ).start()
 
     def _win32_filter(self, msg, data):
-        # 165 is VK_RMENU (Right Alt)
-        if data.vkCode == 165:
+        # 1. 支援波浪鍵 ~ (VK_OEM_3 = 192)，單鍵雙模態 (單擊 Toggle / 長按放開)，特別適用於 ThinkPad 與各廠筆電
+        if data.vkCode == 192:
+            import ctypes
+            user32 = ctypes.windll.user32
+            # 若按住 Shift / Ctrl / Alt，則不攔截，放行給系統輸入標準「~」或複合快捷鍵
+            shift_down = (user32.GetAsyncKeyState(0x10) & 0x8000) != 0
+            ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
+            alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
+            if shift_down or ctrl_down or alt_down:
+                return True
+                
+            if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                if not self.tilde_pressed:
+                    self.tilde_pressed = True
+                    self.tilde_down_time = time.time()
+                    if not self.is_recording:
+                        self._start_recording()
+                    else:
+                        self._stop_recording_and_process(trigger_type="Toggle Click (~)")
+            elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                down_time = getattr(self, 'tilde_down_time', 0.0)
+                self.tilde_pressed = False
+                if self.is_recording and down_time > 0:
+                    held_duration = time.time() - down_time
+                    if held_duration >= 0.6:
+                        self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
+            # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號
+            if self.listener:
+                self.listener.suppress_event()
+            return False
+
+        # 2. 165 is VK_RMENU (Right Alt)，擴充支援 ThinkPad/筆電 extended VK_MENU (18)
+        is_right_alt_vk = (data.vkCode == 165) or (data.vkCode == 18 and (data.flags & 1))
+        if is_right_alt_vk:
             if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
                 if not self.alt_r_pressed:
                     self.alt_r_pressed = True
@@ -482,6 +523,15 @@ class KeyboardManager:
                     self.f8_pressed = True
                     self.process_f8()
 
+            elif _is_tilde(key):
+                if not self.shift_pressed and not self.tilde_pressed:
+                    self.tilde_pressed = True
+                    self.tilde_down_time = time.time()
+                    if not self.is_recording:
+                        self._start_recording()
+                    else:
+                        self._stop_recording_and_process(trigger_type="Toggle Click (~)")
+
             elif _is_f9(key):
                 if not self.f9_pressed:
                     self.f9_pressed = True
@@ -508,6 +558,13 @@ class KeyboardManager:
                 self.shift_pressed = False
             if _is_f8(key):
                 self.f8_pressed = False
+            if _is_tilde(key):
+                down_time = getattr(self, 'tilde_down_time', 0.0)
+                self.tilde_pressed = False
+                if self.is_recording and down_time > 0:
+                    held_duration = time.time() - down_time
+                    if held_duration >= 0.6:
+                        self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
             if _is_f9(key):
                 self.f9_pressed = False
             if _is_right_alt(key):
@@ -530,10 +587,10 @@ class KeyboardManager:
         if hasattr(self, 'power_monitor') and self.power_monitor:
             self.power_monitor.start()
         print("[Keyboard] Hotkey listener started:")
-        print("  <右側 Alt>   : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
-        print("  <F9>         : 備用語音輸入 (單擊切換錄音與貼上)")
-        print("  <F8>         : 桌面反白文字重新修飾")
-        print("  <Shift + F8> : 桌面反白文字極速糾錯教學與自適應學習")
+        print("  <右手 Alt> 或 <~ 鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
+        print("  <F9>                 : 備用語音輸入 (單擊切換錄音與貼上)")
+        print("  <F8>                 : 桌面反白文字重新修飾")
+        print("  <Shift + F8>         : 桌面反白文字極速糾錯教學與自適應學習")
 
     def stop(self):
         if hasattr(self, 'power_monitor') and self.power_monitor:

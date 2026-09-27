@@ -942,10 +942,12 @@ class UIManager:
             tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.BG_CARD, justify="left", wraplength=590).pack(anchor="w", pady=(3, 0))
 
         add_card(
-            "🎙️ 鍵盤右手邊 Alt 鍵 —— 語音輸入主熱鍵 (二合一智慧雙模態)",
-            "• 底層物理阻截：在任何搜尋列、瀏覽器或輸入框按下，絕不觸發 Windows 選單奪焦。\n"
+            "🎙️ 鍵盤右手邊 Alt 或 ~ (波浪鍵) —— 語音輸入主熱鍵 (雙模態)",
+            "• 專為桌機與 ThinkPad/各廠筆電打造，按住 ~ 鍵或右手邊 Alt 即可錄音。\n"
+            "• 底層物理吞噬：在任何搜尋列或輸入框按下，絕不印出雜字、不觸發系統選單奪焦。\n"
             "• 單擊切換 (Toggle)：按一下開始錄音，講完再按一下停止並自動貼上純文字。\n"
-            "• 長按放開 (Hold-to-Talk)：大拇指按住說話，鬆開即停止並自動貼上純文字。",
+            "• 長按放開 (Hold-to-Talk)：按住說話，鬆開即停止並自動貼上純文字。\n"
+            "• 符號輸入保護：若需輸入波浪號，只要按住 Shift + ~ 即可正常輸出符號。",
             "#3498db"
         )
         add_card(
