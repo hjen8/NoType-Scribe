@@ -241,7 +241,7 @@ class KeyboardManager:
             ui.toast(f"⚠️ 修飾失敗: {e}", is_error=True, duration=3000)
 
     def trigger_quick_learn(self):
-        """觸發桌面反白文字極速教學與自適應學習浮窗 (支援 Shift+F8 與 Ctrl+~ 雙模態，無反白亦秒開手動輸入)"""
+        """觸發桌面反白文字極速教學與自適應學習浮窗 (以 Ctrl+~ 為專屬熱鍵，無反白亦秒開手動輸入)"""
         import ctypes
         target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         selected_text, old_clip = self._get_selected_text()
@@ -271,11 +271,10 @@ class KeyboardManager:
 
     def process_f8(self):
         if self.shift_pressed:
-            # Shift + F8: 極速教學與自適應學習浮窗
-            self.trigger_quick_learn()
-        else:
-            # 純 F8: 選取文字重新修飾
-            self.trigger_rephrase()
+            # Shift + F8 已依指示徹底拔除，不觸發極速糾錯
+            return
+        # 純 F8: 選取文字重新修飾
+        self.trigger_rephrase()
 
     def process_audio_thread(self, file_path, duration_sec, app_context=None, target_hwnd=None, ambient_context=""):
         record = HistoryRecord(
@@ -723,7 +722,7 @@ class KeyboardManager:
         
         print("[Keyboard] Hotkey listener started:")
         print("  1. <右手邊 Alt> 或 <~ 波浪鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
-        print("  2. <Shift + F8> 或 <Ctrl + ~> : 桌面反白文字極速糾錯教學與自適應學習 (筆電免 Fn)")
+        print("  2. <Ctrl + ~>                 : 桌面極速糾錯教學與自適應學習 (重要性第二！)")
         print("  3. <F8> 或 <Alt + ~>          : 桌面反白文字重新修飾 (筆電免 Fn)")
 
     def stop(self):
