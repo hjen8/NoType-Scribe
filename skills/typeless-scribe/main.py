@@ -137,9 +137,9 @@ def main():
     print("    2. 長按說話 (Hold-to-Talk): 按住右 Alt 說話，放開即停止並貼上")
     print("  【錄音備用熱鍵：F9 鍵】")
     print("    1. 單擊切換 (Toggle)      : 按一下開始錄音，再按一下停止並貼上")
-    print("  【反白修飾與糾錯熱鍵】")
-    print("    1. F8 鍵                   : 桌面全域反白選取文字重新修飾")
-    print("    2. Shift + F8 鍵           : 桌面全域極速糾錯教學與詞彙學習")
+    print("  【反白修飾與糾錯熱鍵 (筆電桌機雙模態)】")
+    print("    1. F8 或 Alt + ~ 鍵       : 桌面全域反白選取文字重新修飾")
+    print("    2. Shift + F8 或 Ctrl + ~ : 桌面全域極速糾錯教學與詞彙學習 (筆電免 Fn)")
     print("=" * 50)
     
     if not get_api_key():

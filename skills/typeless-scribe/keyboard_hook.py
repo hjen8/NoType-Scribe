@@ -42,6 +42,12 @@ def _is_tilde(key):
 def _is_shift(key):
     return key in {keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r}
 
+def _is_ctrl(key):
+    return key in {keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r}
+
+def _is_alt(key):
+    return key in {keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r}
+
 class KeyboardManager:
     def __init__(self):
         self.recorder = AudioRecorder()
@@ -50,9 +56,13 @@ class KeyboardManager:
         self.alt_r_down_time = 0.0
         self.tilde_pressed = False
         self.tilde_down_time = 0.0
+        self.ctrl_tilde_pressed = False
+        self.alt_tilde_pressed = False
         self.f8_pressed = False
         self.f9_pressed = False
         self.shift_pressed = False
+        self.ctrl_pressed = False
+        self.alt_pressed = False
         self.listener = None
         self.target_hwnd = None
         self.app_context = None
@@ -234,29 +244,44 @@ class KeyboardManager:
             print(f"[F8 Error] {e}")
             ui.toast(f"⚠️ 修飾失敗: {e}", is_error=True, duration=3000)
 
-    def process_f8(self):
+    def trigger_quick_learn(self):
+        """觸發桌面反白文字極速教學與自適應學習浮窗 (支援 Shift+F8 與 Ctrl+~ 雙模態)"""
         import ctypes
         target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         selected_text, old_clip = self._get_selected_text()
         if not selected_text:
-            ui.toast("⚠️ 請先用滑鼠反白選取要處理的文字", is_error=True, duration=2500)
+            ui.toast("⚠️ 請先用滑鼠反白選取要糾錯的文字", is_error=True, duration=2500)
             return
 
+        def on_saved(correct_word):
+            def paste_worker():
+                self._force_focus_and_paste(target_hwnd, correct_word, selected_text, old_clip)
+            threading.Thread(target=paste_worker, daemon=True).start()
+                    
+        ui.msg_queue.put(('open_quick_learn', selected_text, on_saved))
+
+    def trigger_rephrase(self):
+        """觸發桌面反白文字重新修飾與潤飾 (支援 F8 與 Alt+~ 雙模態)"""
+        import ctypes
+        target_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        selected_text, old_clip = self._get_selected_text()
+        if not selected_text:
+            ui.toast("⚠️ 請先用滑鼠反白選取要修飾的文字", is_error=True, duration=2500)
+            return
+
+        threading.Thread(
+            target=self._rephrase_selection_thread,
+            args=(selected_text, old_clip, target_hwnd),
+            daemon=True
+        ).start()
+
+    def process_f8(self):
         if self.shift_pressed:
             # Shift + F8: 極速教學與自適應學習浮窗
-            def on_saved(correct_word):
-                def paste_worker():
-                    self._force_focus_and_paste(target_hwnd, correct_word, selected_text, old_clip)
-                threading.Thread(target=paste_worker, daemon=True).start()
-                        
-            ui.msg_queue.put(('open_quick_learn', selected_text, on_saved))
+            self.trigger_quick_learn()
         else:
             # 純 F8: 選取文字重新修飾
-            threading.Thread(
-                target=self._rephrase_selection_thread,
-                args=(selected_text, old_clip, target_hwnd),
-                daemon=True
-            ).start()
+            self.trigger_rephrase()
 
     def process_audio_thread(self, file_path, duration_sec, app_context=None, target_hwnd=None, ambient_context=""):
         record = HistoryRecord(
@@ -500,11 +525,36 @@ class KeyboardManager:
             if data.vkCode == 192:
                 import ctypes
                 user32 = ctypes.windll.user32
-                # 若按住 Shift / Ctrl / Alt，則不攔截，放行給系統輸入標準「~」或複合快捷鍵
                 shift_down = (user32.GetAsyncKeyState(0x10) & 0x8000) != 0
                 ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
                 alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
-                if shift_down or ctrl_down or alt_down:
+
+                # (1) 筆電免 Fn 專屬熱鍵：Ctrl + ~ (桌面反白文字極速糾錯學習)
+                if ctrl_down and not alt_down:
+                    if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                        if not getattr(self, 'ctrl_tilde_pressed', False):
+                            self.ctrl_tilde_pressed = True
+                            threading.Thread(target=self.trigger_quick_learn, daemon=True).start()
+                    elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                        self.ctrl_tilde_pressed = False
+                    if self.listener:
+                        self.listener.suppress_event()
+                    return False
+
+                # (2) 筆電免 Fn 專屬熱鍵：Alt + ~ (桌面反白文字重新修飾潤飾)
+                if alt_down and not ctrl_down:
+                    if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                        if not getattr(self, 'alt_tilde_pressed', False):
+                            self.alt_tilde_pressed = True
+                            threading.Thread(target=self.trigger_rephrase, daemon=True).start()
+                    elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                        self.alt_tilde_pressed = False
+                    if self.listener:
+                        self.listener.suppress_event()
+                    return False
+
+                # (3) 若按住 Shift（無 Ctrl/Alt），放行給系統輸入標準「~」波浪號
+                if shift_down:
                     return True
                     
                 if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
@@ -563,6 +613,10 @@ class KeyboardManager:
         try:
             if _is_shift(key):
                 self.shift_pressed = True
+            if _is_ctrl(key):
+                self.ctrl_pressed = True
+            if _is_alt(key):
+                self.alt_pressed = True
 
             if _is_f8(key):
                 if not self.f8_pressed:
@@ -570,7 +624,15 @@ class KeyboardManager:
                     self.process_f8()
 
             elif _is_tilde(key):
-                if not self.shift_pressed and not self.tilde_pressed:
+                if self.ctrl_pressed:
+                    if not getattr(self, 'ctrl_tilde_pressed', False):
+                        self.ctrl_tilde_pressed = True
+                        threading.Thread(target=self.trigger_quick_learn, daemon=True).start()
+                elif self.alt_pressed:
+                    if not getattr(self, 'alt_tilde_pressed', False):
+                        self.alt_tilde_pressed = True
+                        threading.Thread(target=self.trigger_rephrase, daemon=True).start()
+                elif not self.shift_pressed and not self.tilde_pressed:
                     self.tilde_pressed = True
                     self.tilde_down_time = time.time()
                     if not self.is_recording:
@@ -602,9 +664,15 @@ class KeyboardManager:
         try:
             if _is_shift(key):
                 self.shift_pressed = False
+            if _is_ctrl(key):
+                self.ctrl_pressed = False
+            if _is_alt(key):
+                self.alt_pressed = False
             if _is_f8(key):
                 self.f8_pressed = False
             if _is_tilde(key):
+                self.ctrl_tilde_pressed = False
+                self.alt_tilde_pressed = False
                 down_time = getattr(self, 'tilde_down_time', 0.0)
                 self.tilde_pressed = False
                 if self.is_recording and down_time > 0:
@@ -669,8 +737,8 @@ class KeyboardManager:
         print("[Keyboard] Hotkey listener started:")
         print("  <右手 Alt> 或 <~ 鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
         print("  <F9>                 : 備用語音輸入 (單擊切換錄音與貼上)")
-        print("  <F8>                 : 桌面反白文字重新修飾")
-        print("  <Shift + F8>         : 桌面反白文字極速糾錯教學與自適應學習")
+        print("  <Shift + F8> 或 <Ctrl + ~> : 桌面反白文字極速糾錯教學與自適應學習 (筆電免 Fn)")
+        print("  <F8> 或 <Alt + ~>    : 桌面反白文字重新修飾 (筆電免 Fn)")
 
     def stop(self):
         self._watchdog_running = False
