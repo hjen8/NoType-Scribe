@@ -245,20 +245,18 @@ class KeyboardManager:
             ui.toast(f"⚠️ 修飾失敗: {e}", is_error=True, duration=3000)
 
     def trigger_quick_learn(self):
-        """觸發桌面反白文字極速教學與自適應學習浮窗 (支援 Shift+F8 與 Ctrl+~ 雙模態)"""
+        """觸發桌面反白文字極速教學與自適應學習浮窗 (支援 Shift+F8 與 Ctrl+~ 雙模態，無反白亦秒開手動輸入)"""
         import ctypes
         target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         selected_text, old_clip = self._get_selected_text()
-        if not selected_text:
-            ui.toast("⚠️ 請先用滑鼠反白選取要糾錯的文字", is_error=True, duration=2500)
-            return
 
         def on_saved(correct_word):
-            def paste_worker():
-                self._force_focus_and_paste(target_hwnd, correct_word, selected_text, old_clip)
-            threading.Thread(target=paste_worker, daemon=True).start()
+            if selected_text:
+                def paste_worker():
+                    self._force_focus_and_paste(target_hwnd, correct_word, selected_text, old_clip)
+                threading.Thread(target=paste_worker, daemon=True).start()
                     
-        ui.msg_queue.put(('open_quick_learn', selected_text, on_saved))
+        ui.msg_queue.put(('open_quick_learn', selected_text or "", on_saved))
 
     def trigger_rephrase(self):
         """觸發桌面反白文字重新修飾與潤飾 (支援 F8 與 Alt+~ 雙模態)"""
@@ -529,8 +527,11 @@ class KeyboardManager:
                 ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
                 alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
 
-                # (1) 筆電免 Fn 專屬熱鍵：Ctrl + ~ (桌面反白文字極速糾錯學習)
-                if ctrl_down and not alt_down:
+                is_ctrl = ctrl_down or getattr(self, 'ctrl_pressed', False)
+                is_alt = alt_down or getattr(self, 'alt_pressed', False)
+
+                # (1) 筆電免 Fn 專屬熱鍵：Ctrl + ~ (桌面文字極速糾錯學習，有選取填入、無選取手動輸入)
+                if is_ctrl and not is_alt:
                     if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
                         if not getattr(self, 'ctrl_tilde_pressed', False):
                             self.ctrl_tilde_pressed = True
@@ -542,7 +543,7 @@ class KeyboardManager:
                     return False
 
                 # (2) 筆電免 Fn 專屬熱鍵：Alt + ~ (桌面反白文字重新修飾潤飾)
-                if alt_down and not ctrl_down:
+                if is_alt and not is_ctrl:
                     if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
                         if not getattr(self, 'alt_tilde_pressed', False):
                             self.alt_tilde_pressed = True
