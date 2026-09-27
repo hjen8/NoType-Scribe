@@ -7,6 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 優先備份目標：Dropbox Brain 專屬目錄
 DROPBOX_CANDIDATES = [
     r"D:\Dropbox\Brain\NoType_Backup",
+    r"C:\Dropbox\Brain\NoType_Backup",
     os.path.join(os.path.expanduser("~"), "Dropbox", "Brain", "NoType_Backup"),
 ]
 
@@ -17,7 +18,17 @@ FILES_TO_BACKUP = [
 ]
 
 def get_backup_dir() -> str:
-    """取得可用的 Dropbox 備份目錄路徑，若母目錄存在則自動建立 NoType_Backup。"""
+    """取得可用的 Dropbox 備份目錄路徑，優先讀取 dropbox_path.txt，若無則巡檢候選路徑。"""
+    cfg_path = os.path.join(BASE_DIR, "dropbox_path.txt")
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                path = f.read().strip()
+                if path and os.path.exists(path):
+                    return path
+        except Exception:
+            pass
+
     for candidate in DROPBOX_CANDIDATES:
         parent = os.path.dirname(candidate)
         if os.path.exists(parent):
@@ -27,6 +38,7 @@ def get_backup_dir() -> str:
             except Exception as e:
                 print(f"[Backup] 建立備份目錄失敗 ({candidate}): {e}")
     return ""
+
 
 def sync_to_backup():
     """將本地的 config.json, dictionary.txt, corrections.json 靜默鏡像備份至 Dropbox。"""
