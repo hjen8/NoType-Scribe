@@ -1150,31 +1150,71 @@ class UIManager:
         self.help_win.configure(bg=self.BG_DARK)
         self.help_win.attributes("-topmost", True)
 
-        w, h = 650, 580
-        sw = self.help_win.winfo_screenwidth()
-        sh = self.help_win.winfo_screenheight()
-        self.help_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        self.help_win.resizable(False, False)
+        w, h = 920, 720
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        actual_w = min(w, max(750, sw - 40))
+        actual_h = min(h, max(520, sh - 60))
+        self.help_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
+        self.help_win.minsize(760, 520)
+        self.help_win.resizable(True, True)  # 允許使用者自由調整視窗大小
 
-        header_frame = tk.Frame(self.help_win, bg="#1a252f", pady=12)
+        header_frame = tk.Frame(self.help_win, bg="#1a252f", pady=14)
         header_frame.pack(fill="x")
         tk.Label(
             header_frame, text="📖 NoType 核心快捷鍵與操作指南", 
-            font=("Microsoft JhengHei", 13, "bold"), fg="#3498db", bg="#1a252f"
+            font=("Microsoft JhengHei", 15, "bold"), fg="#3498db", bg="#1a252f"
         ).pack()
         tk.Label(
-            header_frame, text="專為極速輸入、桌面反白修飾與自適應學習打造", 
-            font=("Microsoft JhengHei", 9), fg="#bdc3c7", bg="#1a252f"
-        ).pack(pady=(2, 0))
+            header_frame, text="專為極速輸入、桌面反白修飾與自適應學習打造（可拖曳邊框自由調整大小）", 
+            font=("Microsoft JhengHei", 10), fg="#bdc3c7", bg="#1a252f"
+        ).pack(pady=(3, 0))
 
-        content_box = tk.Frame(self.help_win, bg=self.BG_DARK, padx=20, pady=10)
-        content_box.pack(fill="both", expand=True)
+        # 可捲動主容器 (支援高 DPI / 小螢幕筆電自由滾動)
+        scroll_container = tk.Frame(self.help_win, bg=self.BG_DARK)
+        scroll_container.pack(fill="both", expand=True, padx=12, pady=6)
+
+        canvas = tk.Canvas(scroll_container, bg=self.BG_DARK, highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=canvas.yview)
+
+        content_box = tk.Frame(canvas, bg=self.BG_DARK)
+        content_box.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas_window = canvas.create_window((0, 0), window=content_box, anchor="nw")
+        
+        help_labels = []
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_window, width=e.width)
+            new_wrap = max(500, e.width - 60)
+            for lbl in help_labels:
+                if lbl.winfo_exists():
+                    lbl.configure(wraplength=new_wrap)
+
+        canvas.bind("<Configure>", _on_canvas_configure)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def _on_help_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_help_mousewheel)
 
         def add_card(title, text, title_fg="#2ecc71"):
-            card = tk.Frame(content_box, bg=self.BG_CARD, padx=14, pady=8, bd=1, relief="solid")
-            card.pack(fill="x", pady=5)
-            tk.Label(card, text=title, font=("Microsoft JhengHei", 10, "bold"), fg=title_fg, bg=self.BG_CARD).pack(anchor="w")
-            tk.Label(card, text=text, font=("Microsoft JhengHei", 9), fg=self.FG_TEXT, bg=self.BG_CARD, justify="left", wraplength=590).pack(anchor="w", pady=(3, 0))
+            card = tk.Frame(content_box, bg=self.BG_CARD, padx=16, pady=10, bd=1, relief="solid")
+            card.pack(fill="x", padx=12, pady=6)
+            tk.Label(card, text=title, font=("Microsoft JhengHei", 12, "bold"), fg=title_fg, bg=self.BG_CARD).pack(anchor="w")
+            lbl_body = tk.Label(
+                card, text=text, 
+                font=("Microsoft JhengHei", 10), 
+                fg=self.FG_TEXT, bg=self.BG_CARD, 
+                justify="left", wraplength=820
+            )
+            lbl_body.pack(anchor="w", pady=(4, 0))
+            help_labels.append(lbl_body)
 
         add_card(
             "🎙️ 鍵盤右手邊 Alt 或 ~ (波浪鍵) —— 語音輸入主熱鍵 (雙模態)",
@@ -1210,7 +1250,7 @@ class UIManager:
             "#f39c12"
         )
 
-        btn_bar = tk.Frame(self.help_win, bg=self.BG_DARK, pady=10)
+        btn_bar = tk.Frame(self.help_win, bg=self.BG_DARK, pady=12)
         btn_bar.pack(fill="x")
 
         def open_readme_file():
@@ -1222,16 +1262,26 @@ class UIManager:
 
         tk.Button(
             btn_bar, text="📝 以記事本開啟完整 README.md", command=open_readme_file,
-            font=("Microsoft JhengHei", 9, "bold"), bg="#34495e", fg="white", bd=0, padx=12, pady=5
+            font=("Microsoft JhengHei", 10, "bold"), bg="#34495e", fg="white", bd=0, padx=14, pady=6
         ).pack(side="left", padx=20)
 
+        def on_help_close():
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+            self.help_win.destroy()
+            self.help_win = None
+
+        self.help_win.protocol("WM_DELETE_WINDOW", on_help_close)
+
         tk.Button(
-            btn_bar, text=" 確定關閉 (Esc) ", command=self.help_win.destroy,
-            font=("Microsoft JhengHei", 9, "bold"), bg="#2980b9", fg="white", bd=0, padx=15, pady=5
+            btn_bar, text=" 確定關閉 (Esc) ", command=on_help_close,
+            font=("Microsoft JhengHei", 10, "bold"), bg="#2980b9", fg="white", bd=0, padx=18, pady=6
         ).pack(side="right", padx=20)
 
-        self.help_win.bind("<Escape>", lambda e: self.help_win.destroy())
-        self.help_win.bind("<Return>", lambda e: self.help_win.destroy())
+        self.help_win.bind("<Escape>", lambda e: on_help_close())
+        self.help_win.bind("<Return>", lambda e: on_help_close())
 
     # =====================================================
     #  專屬字典管理面板 (Dictionary Manager & Import/Export)
@@ -1252,11 +1302,15 @@ class UIManager:
         self.dictionary_win.configure(bg=self.BG_DARK)
         self.dictionary_win.attributes("-topmost", True)
         
-        w, h = 750, 640
-        sw = self.dictionary_win.winfo_screenwidth()
-        sh = self.dictionary_win.winfo_screenheight()
-        self.dictionary_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        self.dictionary_win.minsize(700, 500)
+        w, h = 1020, 680
+        left, top, right, bottom = self._get_screen_workarea()
+        sw = right - left
+        sh = bottom - top
+        actual_w = min(w, max(780, sw - 40))
+        actual_h = min(h, max(500, sh - 60))
+        self.dictionary_win.geometry(f"{actual_w}x{actual_h}+{left + (sw - actual_w) // 2}+{top + (sh - actual_h) // 2}")
+        self.dictionary_win.minsize(840, 500)
+        self.dictionary_win.resizable(True, True)
         
         def on_close():
             if self.dictionary_win:
@@ -1287,17 +1341,17 @@ class UIManager:
         search_box.pack(fill="x")
         
         tk.Label(
-            search_box, text="🔍", font=("Microsoft JhengHei", 10),
+            search_box, text="🔍", font=("Microsoft JhengHei", 11),
             fg=self.FG_DIM, bg=self.BG_DARK
         ).pack(side="left")
         
         self._dict_search_var = tk.StringVar()
         search_entry = tk.Entry(
             search_box, textvariable=self._dict_search_var,
-            font=("Microsoft JhengHei", 10),
+            font=("Microsoft JhengHei", 11),
             bg=self.BG_CARD, fg=self.FG_TEXT, insertbackground="white", bd=1
         )
-        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 8))
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 8), ipady=3)
         
         def expand_all():
             if hasattr(self, '_dict_tree'):
@@ -1317,11 +1371,11 @@ class UIManager:
                     
         tk.Button(
             search_box, text=" ➕ 展開全部 ", command=expand_all,
-            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+            font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=3
         ).pack(side="left", padx=2)
         tk.Button(
             search_box, text=" ➖ 全部收起 ", command=collapse_all,
-            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+            font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=3
         ).pack(side="left", padx=2)
         
         # 智慧雙模態上下移動（分類 或 詞彙）
@@ -1374,11 +1428,11 @@ class UIManager:
                 
         tk.Button(
             search_box, text=" ⬆️ 上移 ", command=lambda: move_selected_item("up"),
-            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+            font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=3
         ).pack(side="left", padx=(10, 2))
         tk.Button(
             search_box, text=" ⬇️ 下移 ", command=lambda: move_selected_item("down"),
-            font=("Microsoft JhengHei", 8), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=6, pady=2
+            font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=3
         ).pack(side="left", padx=2)
         
         # --- Treeview Frame ---
@@ -1396,8 +1450,8 @@ class UIManager:
             background=self.BG_CARD,
             foreground=self.FG_TEXT,
             fieldbackground=self.BG_CARD,
-            font=("Microsoft JhengHei", 10),
-            rowheight=26,
+            font=("Microsoft JhengHei", 11),
+            rowheight=28,
             borderwidth=0
         )
         style.map(
@@ -1416,9 +1470,9 @@ class UIManager:
         self._dict_tree.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self._dict_tree.yview)
         
-        self._dict_tree.tag_configure("category_l1", font=("Microsoft JhengHei", 10, "bold"), foreground="#f1c40f")
-        self._dict_tree.tag_configure("category_l2", font=("Microsoft JhengHei", 9, "bold"), foreground="#3498db")
-        self._dict_tree.tag_configure("word", font=("Microsoft JhengHei", 9), foreground="#ecf0f1")
+        self._dict_tree.tag_configure("category_l1", font=("Microsoft JhengHei", 11, "bold"), foreground="#f1c40f")
+        self._dict_tree.tag_configure("category_l2", font=("Microsoft JhengHei", 10, "bold"), foreground="#3498db")
+        self._dict_tree.tag_configure("word", font=("Microsoft JhengHei", 10), foreground="#ecf0f1")
         
         # 單擊展開/收起樹狀目錄 (點一下展開，再點一下收起)
         def on_tree_click(event):
@@ -1459,24 +1513,24 @@ class UIManager:
         add_box.pack(fill="x")
         
         tk.Label(
-            add_box, text="分類：", font=("Microsoft JhengHei", 9),
+            add_box, text="分類：", font=("Microsoft JhengHei", 10),
             fg=self.FG_DIM, bg=self.BG_DARK
         ).pack(side="left")
         
         self._dict_cat_var = tk.StringVar(value="地理 / 氣候水文與大氣")
         self._dict_cat_menu = ttk.Combobox(
             add_box, textvariable=self._dict_cat_var,
-            state="readonly", width=18, font=("Microsoft JhengHei", 9)
+            state="readonly", width=22, font=("Microsoft JhengHei", 10)
         )
-        self._dict_cat_menu.pack(side="left", padx=(0, 8))
+        self._dict_cat_menu.pack(side="left", padx=(0, 8), ipady=2)
         
         self._dict_add_var = tk.StringVar()
         add_entry = tk.Entry(
             add_box, textvariable=self._dict_add_var,
-            font=("Microsoft JhengHei", 10),
+            font=("Microsoft JhengHei", 11),
             bg=self.BG_CARD, fg=self.FG_TEXT, insertbackground="white", bd=1
         )
-        add_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        add_entry.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=3)
         
         def do_add_word(event=None):
             val = self._dict_add_var.get().strip()
@@ -1513,8 +1567,8 @@ class UIManager:
         
         tk.Button(
             add_box, text=" ➕ 新增詞彙 ", command=do_add_word,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#27ae60", fg="white", bd=0, padx=8, pady=3
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#27ae60", fg="white", bd=0, padx=10, pady=4
         ).pack(side="left", padx=(0, 4))
         
         # 修改選取詞彙對話框
@@ -1535,35 +1589,37 @@ class UIManager:
             edit_win.title("修改專屬詞彙")
             edit_win.configure(bg=self.BG_DARK)
             edit_win.attributes("-topmost", True)
-            w, h = 480, 220
-            sw = edit_win.winfo_screenwidth()
-            sh = edit_win.winfo_screenheight()
-            edit_win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-            edit_win.resizable(False, False)
+            w, h = 560, 260
+            left, top, right, bottom = self._get_screen_workarea()
+            sw = right - left
+            sh = bottom - top
+            edit_win.geometry(f"{w}x{h}+{left + (sw - w) // 2}+{top + (sh - h) // 2}")
+            edit_win.minsize(480, 240)
+            edit_win.resizable(True, True)
             
             tk.Label(
                 edit_win, text=f"✏️ 修改詞彙：{old_word}",
-                font=("Microsoft JhengHei", 11, "bold"),
+                font=("Microsoft JhengHei", 12, "bold"),
                 fg=self.FG_TEXT, bg=self.BG_DARK
             ).pack(anchor="w", padx=20, pady=(15, 8))
             
             f1 = tk.Frame(edit_win, bg=self.BG_DARK)
             f1.pack(fill="x", padx=20, pady=4)
-            tk.Label(f1, text="新詞彙名稱：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
-            entry_new = tk.Entry(f1, font=("Microsoft JhengHei", 10), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
-            entry_new.pack(side="left", fill="x", expand=True)
+            tk.Label(f1, text="新詞彙名稱：", font=("Microsoft JhengHei", 10), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
+            entry_new = tk.Entry(f1, font=("Microsoft JhengHei", 11), bg=self.BG_CARD, fg="white", insertbackground="white", bd=1)
+            entry_new.pack(side="left", fill="x", expand=True, ipady=3)
             entry_new.insert(0, old_word)
             entry_new.focus_set()
             entry_new.select_range(0, tk.END)
             
             f2 = tk.Frame(edit_win, bg=self.BG_DARK)
             f2.pack(fill="x", padx=20, pady=4)
-            tk.Label(f2, text="所屬分類：", font=("Microsoft JhengHei", 9), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
+            tk.Label(f2, text="所屬分類：", font=("Microsoft JhengHei", 10), fg=self.FG_DIM, bg=self.BG_DARK, width=11, anchor="w").pack(side="left")
             import dictionary_manager
             all_cats = dictionary_manager.get_categories()
             edit_cat_var = tk.StringVar(value=old_cat if old_cat in all_cats else (all_cats[0] if all_cats else ""))
-            combo_cat = ttk.Combobox(f2, textvariable=edit_cat_var, values=all_cats, state="readonly", font=("Microsoft JhengHei", 9))
-            combo_cat.pack(side="left", fill="x", expand=True)
+            combo_cat = ttk.Combobox(f2, textvariable=edit_cat_var, values=all_cats, state="readonly", font=("Microsoft JhengHei", 10))
+            combo_cat.pack(side="left", fill="x", expand=True, ipady=2)
             
             def save_edit(event=None):
                 new_w = entry_new.get().strip()
@@ -1604,17 +1660,17 @@ class UIManager:
             btn_row.pack(pady=(12, 10))
             tk.Button(
                 btn_row, text=" 💾 儲存修改 (Enter) ", command=save_edit,
-                font=("Microsoft JhengHei", 9, "bold"), bg="#2980b9", fg="white", bd=0, padx=12, pady=4
+                font=("Microsoft JhengHei", 10, "bold"), bg="#2980b9", fg="white", bd=0, padx=14, pady=5
             ).pack(side="left", padx=6)
             tk.Button(
                 btn_row, text=" 取消 (Esc) ", command=edit_win.destroy,
-                font=("Microsoft JhengHei", 9), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=10, pady=4
+                font=("Microsoft JhengHei", 10), bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=12, pady=5
             ).pack(side="left", padx=6)
             
         tk.Button(
             add_box, text=" ✏️ 修改選取 ", command=do_edit_word,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#2980b9", fg="white", bd=0, padx=8, pady=3
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=10, pady=4
         ).pack(side="left", padx=(0, 4))
         
         # 雙擊詞彙直接喚起修改
@@ -1644,8 +1700,8 @@ class UIManager:
                 
         tk.Button(
             add_box, text=" 🗑️ 刪除選取 ", command=do_delete_word,
-            font=("Microsoft JhengHei", 9),
-            bg="#c0392b", fg="white", bd=0, padx=8, pady=3
+            font=("Microsoft JhengHei", 10),
+            bg="#c0392b", fg="white", bd=0, padx=10, pady=4
         ).pack(side="left", padx=(6, 0))
         
         # --- Bottom Toolbar: Import / Export / Notepad ---
@@ -1655,22 +1711,22 @@ class UIManager:
         # 1. 匯入字典按鈕
         tk.Button(
             toolbar, text=" 📥 匯入字典 (Import)... ", command=self._prompt_import_dictionary,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#2980b9", fg="white", bd=0, padx=10, pady=5
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#2980b9", fg="white", bd=0, padx=12, pady=6
         ).pack(side="left", padx=(0, 6))
         
         # 2. 匯出字典按鈕
         tk.Button(
             toolbar, text=" 📤 匯出字典 (Export)... ", command=self._prompt_export_dictionary,
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#8e44ad", fg="white", bd=0, padx=10, pady=5
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#8e44ad", fg="white", bd=0, padx=12, pady=6
         ).pack(side="left", padx=6)
         
         # 3. 6 月學生名單檢核按鈕
         tk.Button(
             toolbar, text=" 🎓 6 月學生名單檢核 ", command=lambda: self.show_student_reminder_dialog(force=True),
-            font=("Microsoft JhengHei", 9, "bold"),
-            bg="#d35400", fg="white", bd=0, padx=10, pady=5, cursor="hand2"
+            font=("Microsoft JhengHei", 10, "bold"),
+            bg="#d35400", fg="white", bd=0, padx=12, pady=6, cursor="hand2"
         ).pack(side="left", padx=6)
         
         # 4. 記事本開啟
@@ -1680,8 +1736,8 @@ class UIManager:
             
         tk.Button(
             toolbar, text=" 📝 記事本開啟 ", command=open_notepad,
-            font=("Microsoft JhengHei", 9),
-            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=8, pady=5
+            font=("Microsoft JhengHei", 10),
+            bg=self.BTN_BG, fg=self.FG_TEXT, bd=0, padx=12, pady=6
         ).pack(side="right")
         
         # 綁定即時搜尋過濾
