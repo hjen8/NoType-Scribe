@@ -568,7 +568,7 @@ class UIManager:
         )
         copy_btn.pack(side="left", padx=2)
         
-        # 2. 播放按鈕 (寶石綠 #27ae60，代表播放/Play)
+        # 2. 播放按鈕 (寶石綠 #27ae60，點擊播放並動態變身為紅色 ⏹ 停住，再按即停)
         audio_path = rec.audio_path
         dur_sec = getattr(rec, 'duration_sec', None)
         play_btn = tk.Button(
@@ -580,17 +580,6 @@ class UIManager:
         )
         play_btn.configure(command=lambda p=audio_path, b=play_btn, d=dur_sec: self._play_audio(p, b, d))
         play_btn.pack(side="left", padx=2)
-        
-        # 2-1. 專屬停住按鈕 (珊瑚深紅 #c0392b，代表停止/Stop)
-        stop_btn = tk.Button(
-            btn_frame, text=" ⏹ 停住 ",
-            font=("Microsoft JhengHei", 9),
-            bg="#c0392b", fg="white",
-            activebackground="#e74c3c", activeforeground="white",
-            bd=0, padx=5, pady=1, cursor="hand2",
-            command=self._stop_audio
-        )
-        stop_btn.pack(side="left", padx=2)
         
         # 3. 重新辨識按鈕 (海軍藍 #2980b9，代表 AI 重新分析)
         rerun_btn = tk.Button(
