@@ -22,12 +22,11 @@ from PIL import Image, ImageDraw
 import pystray
 from ui_manager import ui
 from keyboard_hook import KeyboardManager
-from backup_manager import restore_from_backup, sync_to_backup, sync_device_diagnostics
+from backup_manager import sync_bidirectional, sync_device_diagnostics
 import config_manager
 
-# 自動災難復原防護：若本地缺少關鍵設定，從 Dropbox 鏡像還原；啟動時靜默鏡像備份
-restore_from_backup()
-sync_to_backup()
+# 自動雙向同步與災難復原防護：啟動時智慧合併雲端與本地字典/自癒修正，並同步筆電診斷日誌
+sync_bidirectional()
 sync_device_diagnostics()
 
 

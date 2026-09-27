@@ -52,14 +52,17 @@ def load_hierarchy() -> list[dict]:
         ...
     ]
     """
-    ensure_dictionary_file()
+def load_hierarchy_from_file(filepath: str) -> list[dict]:
+    """從指定檔案載入兩層結構的階層資料"""
+    if not os.path.exists(filepath):
+        return []
     hierarchy = []
     current_cat = None
     current_sub = None
     seen_all = set()
     
     try:
-        with open(DICTIONARY_FILE, "r", encoding="utf-8-sig") as f:
+        with open(filepath, "r", encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -96,15 +99,20 @@ def load_hierarchy() -> list[dict]:
                         current_cat = {"name": "未分類專用詞", "words": [line], "subcategories": []}
                         hierarchy.append(current_cat)
     except Exception as e:
-        print(f"[Dictionary] Error loading hierarchy: {e}")
+        print(f"[Dictionary] Error loading hierarchy from {filepath}: {e}")
         
     return hierarchy
 
-def save_hierarchy(hierarchy: list[dict]) -> bool:
-    """將階層結構格式化寫入 dictionary.txt"""
+def load_hierarchy() -> list[dict]:
+    """載入本地 dictionary.txt 兩層結構階層資料"""
     ensure_dictionary_file()
+    return load_hierarchy_from_file(DICTIONARY_FILE)
+
+def save_hierarchy_to_file(hierarchy: list[dict], filepath: str) -> bool:
+    """將階層結構格式化寫入指定路徑"""
     try:
-        with open(DICTIONARY_FILE, "w", encoding="utf-8") as f:
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write("# 在此輸入您的專屬詞彙，每行一個。\n")
             f.write("# AI 會優先參考這些詞彙來修正語音辨識。\n\n")
             for cat in hierarchy:
@@ -128,15 +136,120 @@ def save_hierarchy(hierarchy: list[dict]) -> bool:
                         if w and not w.startswith("#"):
                             f.write(f"{w}\n")
                     f.write("\n")
-        try:
-            from backup_manager import sync_to_backup
-            sync_to_backup()
-        except Exception:
-            pass
         return True
     except Exception as e:
-        print(f"[Dictionary] Error saving hierarchy: {e}")
+        print(f"[Dictionary] Error saving hierarchy to {filepath}: {e}")
         return False
+
+def save_hierarchy(hierarchy: list[dict]) -> bool:
+    """將階層結構格式化寫入本地 dictionary.txt，並觸發雙向鏡像同步"""
+    ensure_dictionary_file()
+    success = save_hierarchy_to_file(hierarchy, DICTIONARY_FILE)
+    if success:
+        try:
+            from backup_manager import sync_bidirectional
+            sync_bidirectional()
+        except Exception:
+            try:
+                from backup_manager import sync_to_backup
+                sync_to_backup()
+            except Exception:
+                pass
+    return success
+
+def merge_hierarchies(h_base: list[dict], h_other: list[dict]) -> tuple[list[dict], bool]:
+    """
+    智慧合併兩個階層式字典（聯集保全演算法）：
+    1. 以 h_base 為結構骨幹，保留大分類與子分類順序。
+    2. 若 h_other 包含新分類或新子分類，依序追加至對應位置。
+    3. 分類內的詞彙採聯集合併（保留順序，追加新詞，全域不重複）。
+    4. 回傳 (merged_hierarchy, has_changes)。
+    """
+    import copy
+    if not h_base:
+        return copy.deepcopy(h_other or []), bool(h_other)
+    if not h_other:
+        return copy.deepcopy(h_base), False
+
+    merged = copy.deepcopy(h_base)
+    changed = False
+    seen_all = set()
+
+    # 記錄 h_base 中所有詞彙 (小寫去重)
+    for cat in merged:
+        for w in cat.get('words', []):
+            seen_all.add(w.strip().lower())
+        for sub in cat.get('subcategories', []):
+            for w in sub.get('words', []):
+                seen_all.add(w.strip().lower())
+
+    cat_map = {cat['name'].strip(): cat for cat in merged if 'name' in cat}
+
+    # 合併 h_other 內容
+    for o_cat in h_other:
+        o_cat_name = o_cat.get('name', '').strip()
+        if not o_cat_name:
+            continue
+        
+        if o_cat_name not in cat_map:
+            # 全新大分類，追加至末尾
+            new_cat = {'name': o_cat_name, 'words': [], 'subcategories': []}
+            for w in o_cat.get('words', []):
+                w_str = w.strip()
+                if w_str.lower() not in seen_all:
+                    seen_all.add(w_str.lower())
+                    new_cat['words'].append(w_str)
+                    changed = True
+            for o_sub in o_cat.get('subcategories', []):
+                o_sub_name = o_sub.get('name', '').strip()
+                new_sub = {'name': o_sub_name, 'words': []}
+                for w in o_sub.get('words', []):
+                    w_str = w.strip()
+                    if w_str.lower() not in seen_all:
+                        seen_all.add(w_str.lower())
+                        new_sub['words'].append(w_str)
+                        changed = True
+                new_cat['subcategories'].append(new_sub)
+            merged.append(new_cat)
+            cat_map[o_cat_name] = new_cat
+            changed = True
+        else:
+            # 現有大分類，合併字詞
+            cur_cat = cat_map[o_cat_name]
+            for w in o_cat.get('words', []):
+                w_str = w.strip()
+                if w_str.lower() not in seen_all:
+                    seen_all.add(w_str.lower())
+                    cur_cat['words'].append(w_str)
+                    changed = True
+            
+            # 合併子分類
+            sub_map = {sub['name'].strip(): sub for sub in cur_cat.get('subcategories', []) if 'name' in sub}
+            for o_sub in o_cat.get('subcategories', []):
+                o_sub_name = o_sub.get('name', '').strip()
+                if not o_sub_name:
+                    continue
+                if o_sub_name not in sub_map:
+                    new_sub = {'name': o_sub_name, 'words': []}
+                    for w in o_sub.get('words', []):
+                        w_str = w.strip()
+                        if w_str.lower() not in seen_all:
+                            seen_all.add(w_str.lower())
+                            new_sub['words'].append(w_str)
+                            changed = True
+                    cur_cat['subcategories'].append(new_sub)
+                    sub_map[o_sub_name] = new_sub
+                    changed = True
+                else:
+                    cur_sub = sub_map[o_sub_name]
+                    for w in o_sub.get('words', []):
+                        w_str = w.strip()
+                        if w_str.lower() not in seen_all:
+                            seen_all.add(w_str.lower())
+                            cur_sub['words'].append(w_str)
+                            changed = True
+
+    return merged, changed
 
 
 def load_words() -> list[str]:

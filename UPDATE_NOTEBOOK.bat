@@ -38,7 +38,7 @@ set "SKILL_DIR=%TARGET_DIR%\skills\typeless-scribe"
 
 if not exist "%SKILL_DIR%" mkdir "%SKILL_DIR%" >nul 2>&1
 
-echo %DROPBOX_SRC% > "%SKILL_DIR%\dropbox_path.txt"
+echo %DROPBOX_SRC%> "%SKILL_DIR%\dropbox_path.txt"
 
 echo [3/4] Copying latest files from Dropbox...
 copy /y "%DROPBOX_SRC%*.py" "%SKILL_DIR%\" >nul
@@ -47,6 +47,14 @@ copy /y "%DROPBOX_SRC%*.txt" "%SKILL_DIR%\" >nul
 copy /y "%DROPBOX_SRC%*.bat" "%TARGET_DIR%\" >nul
 
 echo [OK] Files copied successfully!
+echo.
+echo [INFO] Configuring Boot Auto-Start...
+schtasks /query /tn "NoType_AutoStart" >nul 2>&1
+if %errorlevel% neq 0 (
+    schtasks /create /tn "NoType_AutoStart" /tr "wscript.exe \"%SKILL_DIR%\run_hidden.vbs\"" /sc onlogon /rl highest /f >nul 2>&1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Startup') + '\NoType Scribe.lnk'); $s.TargetPath = '%TARGET_DIR%\start_admin.bat'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'NoType Scribe Auto-Start'; $s.Save()" >nul 2>&1
+
 echo.
 echo [4/4] Starting NoType in background...
 cd /d "%TARGET_DIR%"

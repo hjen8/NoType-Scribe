@@ -1387,6 +1387,11 @@ class UIManager:
     # =====================================================
     def open_dictionary(self, focus_category=None):
         import dictionary_manager
+        try:
+            from backup_manager import sync_bidirectional
+            sync_bidirectional()
+        except Exception as e:
+            print(f"[UI] 開啟字典同步雲端失敗: {e}")
         
         if self.dictionary_win and self.dictionary_win.winfo_exists():
             self.dictionary_win.lift()

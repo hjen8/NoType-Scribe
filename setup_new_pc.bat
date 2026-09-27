@@ -67,12 +67,19 @@ if exist "%~dp0skills\typeless-scribe\config.json" (
     echo [IMPORTANT] Please open skills\typeless-scribe\config.json and set your GROQ_API_KEY.
 )
 
-REM 5. Create Desktop shortcut
+REM 5. Create Desktop shortcut and Boot Auto-Start
 echo.
-echo [5/5] Creating Desktop Shortcut...
+echo [5/5] Creating Desktop Shortcut and Boot Auto-Start...
 set "TARGET_BAT=%~dp0start_admin.bat"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut("$d\NoType Scribe.lnk"); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%~dp0'; $s.Description = 'NoType Scribe Audio Input'; $s.Save()" >nul 2>&1
 echo [OK] Desktop shortcut created: "NoType Scribe"
+
+schtasks /query /tn "NoType_AutoStart" >nul 2>&1
+if %errorlevel% neq 0 (
+    schtasks /create /tn "NoType_AutoStart" /tr "wscript.exe \"%~dp0skills\typeless-scribe\run_hidden.vbs\"" /sc onlogon /rl highest /f >nul 2>&1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Startup') + '\NoType Scribe.lnk'); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%~dp0'; $s.Description = 'NoType Scribe Auto-Start'; $s.Save()" >nul 2>&1
+echo [OK] Boot Auto-Start configured successfully.
 
 echo.
 echo ===================================================
