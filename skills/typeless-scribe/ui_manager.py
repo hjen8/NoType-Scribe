@@ -605,7 +605,7 @@ class UIManager:
         
         # 4. 糾錯學習按鈕 (暖陽橘 #d35400，代表編輯/教學)
         edit_btn = tk.Button(
-            btn_frame, text=" ✏️ 糾錯 ",
+            btn_frame, text=" ✎ 糾錯 ",
             font=("Microsoft JhengHei", 9),
             bg="#d35400", fg="white",
             activebackground="#e67e22", activeforeground="white",

@@ -199,8 +199,8 @@ def get_active_chat_models(client, force_refresh=False) -> list:
         remote_models = client.models.list()
         all_ids = [m.id for m in remote_models.data]
         
-        # 排除語音、防護欄 (Guardrail)、音訊專用模型
-        ignore_keywords = ["whisper", "guard", "orpheus", "embed", "vision", "moderation", "safeguard"]
+        # 排除語音、防護欄 (Guardrail)、音訊專用模型與小 context 阿拉伯模型
+        ignore_keywords = ["whisper", "guard", "orpheus", "embed", "vision", "moderation", "safeguard", "allam"]
         filtered = [
             m_id for m_id in all_ids 
             if not any(kw in m_id.lower() for kw in ignore_keywords)
@@ -513,16 +513,20 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                         ],
                         "temperature": 0.1,
                     }
-                    # Qwen 為非推理模型只需 350 tokens；GPT-OSS 為推理模型需 600 tokens 容納內部 reasoning，總請求均低於 7,000 tokens (嚴格守護 8k TPM)
+                    # Qwen 為非推理模型只需 350 tokens；GPT-OSS 為推理模型，必須搭配 reasoning_effort='low' 將內部思考壓縮至 ~35 tokens，並配置 max_tokens=500 確保完整輸出且守護 8k TPM
                     if "gpt-oss" in model_name.lower():
-                        call_kwargs["max_tokens"] = 600
+                        call_kwargs["max_tokens"] = 500
+                        call_kwargs["reasoning_effort"] = "low"
                     elif "qwen" in model_name.lower():
                         call_kwargs["max_tokens"] = 350
                     else:
                         call_kwargs["max_tokens"] = 400
                         
                     completion = client.chat.completions.create(**call_kwargs)
-                    raw_res = completion.choices[0].message.content.strip()
+                    raw_res = completion.choices[0].message.content
+                    if raw_res:
+                        raw_res = raw_res.strip()
+                        raw_res = re.sub(r'<\/?text>', '', raw_res).strip()
                     if raw_res:
                         return apply_dictionary_post_process(raw_res, ambient_context=ambient_context)
                     else:
