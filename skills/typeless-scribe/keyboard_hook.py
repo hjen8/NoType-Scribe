@@ -58,6 +58,8 @@ class KeyboardManager:
         self.app_context = None
         self.power_monitor = PowerMonitor(on_resume=self._on_system_resume)
         self.timeout_timer = None
+        self._watchdog_running = False
+        self._watchdog_thread = None
 
     def _on_system_resume(self, reason: str):
         safe_print(f"[Power] Audio stream reconnect triggered by {reason}...")
@@ -438,7 +440,16 @@ class KeyboardManager:
             return
         self.is_recording = False
         
-        # 錄音正常停止，立即取消超時定時器
+        # 立即重設按鍵狀態旗標防呆，防止任何漏按鍵或卡鍵
+        self.tilde_pressed = False
+        self.alt_r_pressed = False
+        self.tilde_down_time = 0.0
+        self.alt_r_down_time = 0.0
+        
+        # 1. 立即關閉錄音懸浮視窗！
+        ui.msg_queue.put('hide_floating')
+        
+        # 2. 錄音正常停止，立即取消超時定時器
         if self.timeout_timer:
             try:
                 self.timeout_timer.cancel()
@@ -446,74 +457,84 @@ class KeyboardManager:
                 pass
             self.timeout_timer = None
             
-        print(f"[REC] Recording stopped ({trigger_type}), processing...")
-        try:
-            file_path, duration_sec = self.recorder.stop_recording()
-        except Exception as e:
-            print(f"[REC] Exception in stop_recording: {e}")
-            file_path, duration_sec = None, 0
+        # 3. 核心解耦：將 stop_recording 與音訊存檔、STT 辨識完全移入獨立後台線程！
+        # 讓 Windows 底層鍵盤鉤子 (_win32_filter) 在 <0.1ms 內立即向 Windows OS 返回！
+        # 徹底杜絕 Windows LowLevelHooksTimeout (200ms) 靜默拔勾 (Unhook) 致命問題！
+        def _stop_worker():
+            print(f"[REC] Recording stopped ({trigger_type}), processing in background...")
+            try:
+                file_path, duration_sec = self.recorder.stop_recording()
+            except Exception as e:
+                print(f"[REC] Exception in stop_recording: {e}")
+                file_path, duration_sec = None, 0
+            
+            if file_path:
+                self.process_audio_thread(
+                    file_path, duration_sec, self.app_context, self.target_hwnd, self.ambient_context
+                )
         
-        if file_path:
-            threading.Thread(
-                target=self.process_audio_thread,
-                args=(file_path, duration_sec, self.app_context, self.target_hwnd, self.ambient_context),
-                daemon=True
-            ).start()
+        threading.Thread(target=_stop_worker, daemon=True).start()
 
     def _win32_filter(self, msg, data):
-        # 1. 支援波浪鍵 ~ (VK_OEM_3 = 192)，單鍵雙模態 (單擊 Toggle / 長按放開)，特別適用於 ThinkPad 與各廠筆電
-        if data.vkCode == 192:
-            import ctypes
-            user32 = ctypes.windll.user32
-            # 若按住 Shift / Ctrl / Alt，則不攔截，放行給系統輸入標準「~」或複合快捷鍵
-            shift_down = (user32.GetAsyncKeyState(0x10) & 0x8000) != 0
-            ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
-            alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
-            if shift_down or ctrl_down or alt_down:
-                return True
-                
-            if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
-                if not self.tilde_pressed:
-                    self.tilde_pressed = True
-                    self.tilde_down_time = time.time()
-                    if not self.is_recording:
-                        self._start_recording()
-                    else:
-                        self._stop_recording_and_process(trigger_type="Toggle Click (~)")
-            elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
-                down_time = getattr(self, 'tilde_down_time', 0.0)
-                self.tilde_pressed = False
-                if self.is_recording and down_time > 0:
-                    held_duration = time.time() - down_time
-                    if held_duration >= 0.6:
-                        self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
-            # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號
-            if self.listener:
-                self.listener.suppress_event()
-            return False
+        try:
+            # 1. 支援波浪鍵 ~ (VK_OEM_3 = 192)，單鍵雙模態 (單擊 Toggle / 長按放開)，特別適用於 ThinkPad 與各廠筆電
+            if data.vkCode == 192:
+                import ctypes
+                user32 = ctypes.windll.user32
+                # 若按住 Shift / Ctrl / Alt，則不攔截，放行給系統輸入標準「~」或複合快捷鍵
+                shift_down = (user32.GetAsyncKeyState(0x10) & 0x8000) != 0
+                ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
+                alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
+                if shift_down or ctrl_down or alt_down:
+                    return True
+                    
+                if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                    if not self.tilde_pressed:
+                        self.tilde_pressed = True
+                        self.tilde_down_time = time.time()
+                        if not self.is_recording:
+                            self._start_recording()
+                        else:
+                            self._stop_recording_and_process(trigger_type="Toggle Click (~)")
+                elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                    down_time = getattr(self, 'tilde_down_time', 0.0)
+                    self.tilde_pressed = False
+                    self.tilde_down_time = 0.0
+                    if self.is_recording and down_time > 0:
+                        held_duration = time.time() - down_time
+                        if held_duration >= 0.6:
+                            self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (~) {held_duration:.1f}s")
+                # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號
+                if self.listener:
+                    self.listener.suppress_event()
+                return False
 
-        # 2. 165 is VK_RMENU (Right Alt)，擴充支援 ThinkPad/筆電 extended VK_MENU (18)
-        is_right_alt_vk = (data.vkCode == 165) or (data.vkCode == 18 and (data.flags & 1))
-        if is_right_alt_vk:
-            if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
-                if not self.alt_r_pressed:
-                    self.alt_r_pressed = True
-                    self.alt_r_down_time = time.time()
-                    if not self.is_recording:
-                        self._start_recording()
-                    else:
-                        self._stop_recording_and_process(trigger_type="Toggle Click (Right Alt)")
-            elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
-                down_time = getattr(self, 'alt_r_down_time', 0.0)
-                self.alt_r_pressed = False
-                if self.is_recording and down_time > 0:
-                    held_duration = time.time() - down_time
-                    if held_duration >= 0.6:
-                        self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (Right Alt) {held_duration:.1f}s")
-            # 物理吞噬此事件，向 Windows 回傳 1，徹底杜絕 SC_KEYMENU 系統選單奪焦
-            if self.listener:
-                self.listener.suppress_event()
-            return False
+            # 2. 165 is VK_RMENU (Right Alt)，擴充支援 ThinkPad/筆電 extended VK_MENU (18)
+            is_right_alt_vk = (data.vkCode == 165) or (data.vkCode == 18 and (data.flags & 1))
+            if is_right_alt_vk:
+                if msg in (0x100, 0x104):  # WM_KEYDOWN / WM_SYSKEYDOWN
+                    if not self.alt_r_pressed:
+                        self.alt_r_pressed = True
+                        self.alt_r_down_time = time.time()
+                        if not self.is_recording:
+                            self._start_recording()
+                        else:
+                            self._stop_recording_and_process(trigger_type="Toggle Click (Right Alt)")
+                elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
+                    down_time = getattr(self, 'alt_r_down_time', 0.0)
+                    self.alt_r_pressed = False
+                    self.alt_r_down_time = 0.0
+                    if self.is_recording and down_time > 0:
+                        held_duration = time.time() - down_time
+                        if held_duration >= 0.6:
+                            self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (Right Alt) {held_duration:.1f}s")
+                # 物理吞噬此事件，向 Windows 回傳 1，徹底杜絕 SC_KEYMENU 系統選單奪焦
+                if self.listener:
+                    self.listener.suppress_event()
+                return False
+        except Exception as e:
+            safe_print(f"[_win32_filter Error] {e}")
+            return True
         return True
 
     def on_press(self, key):
@@ -580,6 +601,34 @@ class KeyboardManager:
         except Exception as e:
             print(f"[ERROR] on_release: {e}")
 
+    def _watchdog_loop(self):
+        """鍵盤鉤子守護線程：每 3 秒檢查 Listener 存活狀態，若異常停止則全自動自癒重啟"""
+        while getattr(self, '_watchdog_running', False):
+            time.sleep(3.0)
+            try:
+                if self.listener is None or not self.listener.is_alive():
+                    safe_print("[Watchdog] ⚠️ 鍵盤監聽鉤子異常終止，全自動自癒重啟中...")
+                    self.restart_listener()
+            except Exception as e:
+                safe_print(f"[Watchdog Error] {e}")
+
+    def restart_listener(self):
+        try:
+            if self.listener:
+                try:
+                    self.listener.stop()
+                except Exception:
+                    pass
+            self.listener = keyboard.Listener(
+                on_press=self.on_press,
+                on_release=self.on_release,
+                win32_event_filter=self._win32_filter
+            )
+            self.listener.start()
+            safe_print("[Watchdog] ✅ 鍵盤監聽鉤子已成功恢復運作！")
+        except Exception as e:
+            safe_print(f"[Watchdog] 重啟失敗: {e}")
+
     def start(self):
         self.listener = keyboard.Listener(
             on_press=self.on_press,
@@ -589,6 +638,12 @@ class KeyboardManager:
         self.listener.start()
         if hasattr(self, 'power_monitor') and self.power_monitor:
             self.power_monitor.start()
+            
+        # 啟動鍵盤鉤子守護線程 (Watchdog 自癒守門員)
+        self._watchdog_running = True
+        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
+        self._watchdog_thread.start()
+        
         print("[Keyboard] Hotkey listener started:")
         print("  <右手 Alt> 或 <~ 鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
         print("  <F9>                 : 備用語音輸入 (單擊切換錄音與貼上)")
@@ -596,6 +651,7 @@ class KeyboardManager:
         print("  <Shift + F8>         : 桌面反白文字極速糾錯教學與自適應學習")
 
     def stop(self):
+        self._watchdog_running = False
         if hasattr(self, 'power_monitor') and self.power_monitor:
             try:
                 self.power_monitor.stop()
@@ -606,3 +662,4 @@ class KeyboardManager:
                 self.listener.stop()
             except Exception:
                 pass
+
