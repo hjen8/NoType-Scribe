@@ -1,0 +1,7 @@
+name = "notype-api"
+main = "worker.js"
+compatibility_date = "2026-09-28"
+
+[vars]
+# 可以在 Cloudflare 後台設定或直接使用預設 Key
+# GROQ_API_KEY = "gsk_..."
