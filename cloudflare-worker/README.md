@@ -10,6 +10,8 @@
 3. **臺灣繁體雙重校正**：結合 Groq Whisper-large-v3-turbo (極速 STT) + Llama 3.3-70B 臺灣語意標點潤飾 + 自癒學習庫二度替換。
 4. **iOS 極簡 4 塊積木**：音檔直接傳送，Worker 回傳乾淨純文字，iPhone 捷徑自動秒存剪貼簿。
 
+> 📌 **綁定帳號備忘**：長官 Cloudflare 管理帳號綁定 Google 帳號：**`hjen84@gmail.com`**
+
 ---
 
 ## 🛠️ 第一階段：Cloudflare 2 分鐘部署教學（免指令、免信用卡）
