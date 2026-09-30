@@ -533,8 +533,7 @@ class KeyboardManager:
                             threading.Thread(target=self.trigger_quick_learn, daemon=True).start()
                     elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
                         self.ctrl_tilde_pressed = False
-                    if self.listener:
-                        self.listener.suppress_event()
+                    # pynput event_filter 回傳 False 即代表物理吞噬該事件，向 Windows 回傳 1 阻截傳遞
                     return False
 
                 # (2) 筆電免 Fn 專屬熱鍵：Alt + ~ (桌面反白文字重新修飾潤飾)
@@ -545,8 +544,7 @@ class KeyboardManager:
                             threading.Thread(target=self.trigger_rephrase, daemon=True).start()
                     elif msg in (0x101, 0x105):  # WM_KEYUP / WM_SYSKEYUP
                         self.alt_tilde_pressed = False
-                    if self.listener:
-                        self.listener.suppress_event()
+                    # pynput event_filter 回傳 False 即代表物理吞噬該事件，向 Windows 回傳 1 阻截傳遞
                     return False
 
                 # (3) 若按住 Shift（無 Ctrl/Alt），放行給系統輸入標準「~」波浪號
@@ -593,14 +591,16 @@ class KeyboardManager:
                                 self._stop_recording_and_process(trigger_type=f"Hold-to-Talk (Right Alt) {held_duration:.1f}s")
                     should_suppress = True
         except Exception as e:
+            # 若為 pynput 底層的 SuppressException，直接吞噬阻截，絕不視為錯誤更不可放行
+            from pynput._util.win32 import SystemHook
+            if isinstance(e, SystemHook.SuppressException):
+                return False
             import traceback
             safe_print(f"[_win32_filter Error] {traceback.format_exc()}")
             return True
 
         if should_suppress:
             # 物理吞噬此事件，向 Windows 回傳 1，不印出 ` 符號且徹底杜絕 SC_KEYMENU 系統選單奪焦
-            if self.listener:
-                self.listener.suppress_event()
             return False
 
         return True
