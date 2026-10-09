@@ -1,9 +1,9 @@
 # 🌲 NoType 歷史版本樹 (Project Version Tree)
 
 > **核心定位**：本文件與專案說明書 (`README.md` / `ANTIGRAVITY.md`) 具同等級核心地位。  
-> 📌 **當前身處分支**：`main` (HEAD -> `112030c`)  
+> 📌 **當前身處分支**：`main` (HEAD -> `fde5927`)  
 > 🚦 **工作區狀態**：✅ 工作目錄整潔 (Clean)  
-> 🕒 **最後更新時間**：`2026-10-09 20:18:32`
+> 🕒 **最後更新時間**：`2026-10-09 20:18:49`
 
 ---
 
@@ -16,19 +16,18 @@ flowchart TD
     classDef default fill:#f8f9fa,stroke:#495057,stroke-width:1.8px,color:#212529,font-size:13px;
     classDef current fill:#ffebee,stroke:#c00000,stroke-width:3px,color:#900,font-weight:bold,font-size:13px;
     classDef mergeNode fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1,font-size:13px;
-    n_c08b18c(["1. 【功能】bidirectional di.."]):::default
-    n_5661482(["2. 【修復】timestamp-based .."]):::default
-    n_4c9bcd5(["3. 【修復】remove mainland .."]):::default
-    n_4a3ea27(["4. 【維護】update requireme.."]):::default
-    n_a05b1df(["5. 【功能】add Cloudflare W.."]):::default
-    n_18e4ca1(["6. 【功能】add 版本樹 to dicti.."]):::default
-    n_47c4704(["7. 【文件】record Cloudflar.."]):::default
-    n_58bbc8c(["8. 【功能】NoType 移植 iPhone.."]):::default
-    n_7723cba(["9. 【文件】同步收工版本樹 VERSION_.."]):::default
-    n_e2bc0e4(["10. 【修復】根除底層鍵盤鉤子 suppres.."]):::default
-    n_3a6b4ee(["11. 【修復】波浪鍵字元洩漏 - 改用 rai.."]):::default
-    n_112030c(["12. 【功能】NoType 快捷鍵重組：徹底拔.."]):::current
-    n_c08b18c --> n_5661482
+    n_5661482(["1. 【修復】timestamp-based .."]):::default
+    n_4c9bcd5(["2. 【修復】remove mainland .."]):::default
+    n_4a3ea27(["3. 【維護】update requireme.."]):::default
+    n_a05b1df(["4. 【功能】add Cloudflare W.."]):::default
+    n_18e4ca1(["5. 【功能】add 版本樹 to dicti.."]):::default
+    n_47c4704(["6. 【文件】record Cloudflar.."]):::default
+    n_58bbc8c(["7. 【功能】NoType 移植 iPhone.."]):::default
+    n_7723cba(["8. 【文件】同步收工版本樹 VERSION_.."]):::default
+    n_e2bc0e4(["9. 【修復】根除底層鍵盤鉤子 suppres.."]):::default
+    n_3a6b4ee(["10. 【修復】波浪鍵字元洩漏 - 改用 rai.."]):::default
+    n_112030c(["11. 【功能】NoType 快捷鍵重組：徹底拔.."]):::default
+    n_fde5927(["12. 【文件】同步收工版本樹 VERSION_.."]):::current
     n_5661482 --> n_4c9bcd5
     n_4c9bcd5 --> n_4a3ea27
     n_4a3ea27 --> n_a05b1df
@@ -39,6 +38,7 @@ flowchart TD
     n_7723cba --> n_e2bc0e4
     n_e2bc0e4 --> n_3a6b4ee
     n_3a6b4ee --> n_112030c
+    n_112030c --> n_fde5927
 ```
 
 ---
@@ -48,18 +48,19 @@ flowchart TD
 
 | 編號 (No.) | 存檔ID (Hash) | 提交時間 | 分支/標籤 | 說明 (Commit Message) | 時光機指令 (前往此版本) |
 | :---: | :---: | :---: | :---: | :--- | :--- |
-| **12** | `112030c` | 2026-10-09 20:18 |  `HEAD -> main, origin/main, origin/HEAD` | 【功能】NoType 快捷鍵重組：徹底拔除 F8 統一為 Alt + ~，第 1 點標題調整為 ~ 波浪鍵 居首 | `git checkout 112030c` |
-| **11** | `3a6b4ee` | 2026-09-30 20:00 |  | 【修復】波浪鍵字元洩漏 - 改用 raise SuppressException 真正阻截 Windows 事件 | `git checkout 3a6b4ee` |
-| **10** | `e2bc0e4` | 2026-09-30 19:25 |  | 【修復】根除底層鍵盤鉤子 suppress_event 異常，消除筆電 Windows 修飾鍵 Alt 卡死與鍵盤錯亂 | `git checkout e2bc0e4` |
-| **9** | `7723cba` | 2026-09-28 16:00 |  | 【文件】同步收工版本樹 VERSION_TREE.md | `git checkout 7723cba` |
-| **8** | `58bbc8c` | 2026-09-28 15:57 |  | 【功能】NoType 移植 iPhone 語音輸入方案 B 圓滿收官：Cloudflare Worker 動態中繼、iOS 雙手勢快捷輸入與 SayIt 歷史抽屜落成 | `git checkout 58bbc8c` |
-| **7** | `47c4704` | 2026-09-28 13:49 |  | 【文件】record Cloudflare account hjen84@gmail.com | `git checkout 47c4704` |
-| **6** | `18e4ca1` | 2026-09-28 13:44 |  | 【功能】add 版本樹 to dictionary 與 corrections | `git checkout 18e4ca1` |
-| **5** | `a05b1df` | 2026-09-28 13:44 |  | 【功能】add Cloudflare Worker relay 與 iOS shortcut deployment guide without secrets | `git checkout a05b1df` |
-| **4** | `4a3ea27` | 2026-09-28 02:49 |  | 【維護】update requirements.txt | `git checkout 4a3ea27` |
-| **3** | `4c9bcd5` | 2026-09-28 02:49 |  | 【修復】remove mainland term 與 update dictionary data | `git checkout 4c9bcd5` |
-| **2** | `5661482` | 2026-09-28 02:44 |  | 【修復】timestamp-based sync to fix deleted dictionary words resurrecting | `git checkout 5661482` |
-| **1** | `c08b18c` | 2026-09-28 02:28 |  | 【功能】bidirectional dictionary smart merge 與 notebook 自動-start on boot | `git checkout c08b18c` |
+| **12** | `fde5927` | 2026-10-09 20:18 |  `HEAD -> main, origin/main, origin/HEAD` | 【文件】同步收工版本樹 VERSION_TREE.md | `git checkout fde5927` |
+| **11** | `112030c` | 2026-10-09 20:18 |  | 【功能】NoType 快捷鍵重組：徹底拔除 F8 統一為 Alt + ~，第 1 點標題調整為 ~ 波浪鍵 居首 | `git checkout 112030c` |
+| **10** | `3a6b4ee` | 2026-09-30 20:00 |  | 【修復】波浪鍵字元洩漏 - 改用 raise SuppressException 真正阻截 Windows 事件 | `git checkout 3a6b4ee` |
+| **9** | `e2bc0e4` | 2026-09-30 19:25 |  | 【修復】根除底層鍵盤鉤子 suppress_event 異常，消除筆電 Windows 修飾鍵 Alt 卡死與鍵盤錯亂 | `git checkout e2bc0e4` |
+| **8** | `7723cba` | 2026-09-28 16:00 |  | 【文件】同步收工版本樹 VERSION_TREE.md | `git checkout 7723cba` |
+| **7** | `58bbc8c` | 2026-09-28 15:57 |  | 【功能】NoType 移植 iPhone 語音輸入方案 B 圓滿收官：Cloudflare Worker 動態中繼、iOS 雙手勢快捷輸入與 SayIt 歷史抽屜落成 | `git checkout 58bbc8c` |
+| **6** | `47c4704` | 2026-09-28 13:49 |  | 【文件】record Cloudflare account hjen84@gmail.com | `git checkout 47c4704` |
+| **5** | `18e4ca1` | 2026-09-28 13:44 |  | 【功能】add 版本樹 to dictionary 與 corrections | `git checkout 18e4ca1` |
+| **4** | `a05b1df` | 2026-09-28 13:44 |  | 【功能】add Cloudflare Worker relay 與 iOS shortcut deployment guide without secrets | `git checkout a05b1df` |
+| **3** | `4a3ea27` | 2026-09-28 02:49 |  | 【維護】update requirements.txt | `git checkout 4a3ea27` |
+| **2** | `4c9bcd5` | 2026-09-28 02:49 |  | 【修復】remove mainland term 與 update dictionary data | `git checkout 4c9bcd5` |
+| **1** | `5661482` | 2026-09-28 02:44 |  | 【修復】timestamp-based sync to fix deleted dictionary words resurrecting | `git checkout 5661482` |
+| **-** | `c08b18c` | 2026-09-28 02:28 |  | 【功能】bidirectional dictionary smart merge 與 notebook 自動-start on boot | `git checkout c08b18c` |
 | **-** | `0839abd` | 2026-09-27 21:11 |  | 【功能】completely excise Shift+F8, promote Ctrl+~ as sole unconflicted hotkey 針對 quick learn | `git checkout 0839abd` |
 | **-** | `1ebb0ec` | 2026-09-27 20:57 |  | 【功能】clean F9 from main.py startup banner 與 reorder hotkeys | `git checkout 1ebb0ec` |
 | **-** | `672623f` | 2026-09-27 20:56 |  | 【功能】excise F9 key, reorder hotkeys 1:Alt/~, 2:Shift+F8/Ctrl+~, 3:F8/Alt+~ , 與 implement window geometry memory 針對 history, dictionary, help, 與 quick learn | `git checkout 672623f` |
@@ -72,7 +73,6 @@ flowchart TD
 | **-** | `21816a1` | 2026-09-27 17:22 |  | 【修復】lower silence threshold to 0.0005, add stop_recording toast reasons, enable 自動-diagnostics to Dropbox, 與 動態 python discovery | `git checkout 21816a1` |
 | **-** | `512353f` | 2026-09-27 17:05 |  | 【修復】ensure UPDATE_NOTEBOOK.bat copies all python scripts to prevent omitting groq_api.py on notebook | `git checkout 512353f` |
 | **-** | `da39233` | 2026-09-27 16:55 |  | 【功能】implement true MCI audio pause/resume toggle orange pause 與 dedicated stop/reset button red stop | `git checkout da39233` |
-| **-** | `54d1c25` | 2026-09-27 16:47 |  | 【重構】eliminate 冗餘 dedicated stop button from history cards, embracing single 動態 play-stop toggle | `git checkout 54d1c25` |
 
 ---
 
@@ -83,7 +83,8 @@ flowchart TD
 
 ### 4. 終端完整拓撲圖 (Terminal ASCII Graph)
 ```text
-* 112030c (HEAD -> main, origin/main, origin/HEAD) 【功能】NoType 快捷鍵重組：徹底拔除 F8 統一為 Alt + ~，第 1 點標題調整為 ~ (波浪鍵) 居首
+* fde5927 (HEAD -> main, origin/main, origin/HEAD) 【文件】同步收工版本樹 VERSION_TREE.md
+* 112030c 【功能】NoType 快捷鍵重組：徹底拔除 F8 統一為 Alt + ~，第 1 點標題調整為 ~ (波浪鍵) 居首
 * 3a6b4ee 【修復】波浪鍵字元洩漏 - 改用 raise SuppressException 真正阻截 Windows 事件
 * e2bc0e4 【修復】根除底層鍵盤鉤子 suppress_event 異常，消除筆電 Windows 修飾鍵 Alt 卡死與鍵盤錯亂
 * 7723cba 【文件】同步收工版本樹 VERSION_TREE.md
@@ -107,7 +108,6 @@ flowchart TD
 * 21816a1 fix(notebook): lower silence threshold to 0.0005, add stop_recording toast reasons, enable auto-diagnostics to Dropbox, and dynamic python discovery
 * 512353f fix(deploy): ensure UPDATE_NOTEBOOK.bat copies all python scripts to prevent omitting groq_api.py on notebook
 * da39233 feat(ui): implement true MCI audio pause/resume toggle (orange pause) and dedicated stop/reset button (red stop)
-* 54d1c25 refactor(ui): eliminate redundant dedicated stop button from history cards, embracing single dynamic play-stop toggle
 ```
 
 ---
