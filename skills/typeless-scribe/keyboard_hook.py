@@ -26,8 +26,6 @@ def _is_right_alt(key):
         return True
     return False
 
-def _is_f8(key):
-    return key == keyboard.Key.f8
 
 def _is_tilde(key):
     if hasattr(key, 'vk') and key.vk == 192:
@@ -55,7 +53,6 @@ class KeyboardManager:
         self.tilde_down_time = 0.0
         self.ctrl_tilde_pressed = False
         self.alt_tilde_pressed = False
-        self.f8_pressed = False
         self.shift_pressed = False
         self.ctrl_pressed = False
         self.alt_pressed = False
@@ -237,7 +234,7 @@ class KeyboardManager:
             self._force_focus_and_paste(target_hwnd, refined, selected_text, old_clip)
             ui.toast("✅ 選取文字已重新修飾替換！", is_error=False, duration=2000)
         except Exception as e:
-            print(f"[F8 Error] {e}")
+            print(f"[Rephrase Error] {e}")
             ui.toast(f"⚠️ 修飾失敗: {e}", is_error=True, duration=3000)
 
     def trigger_quick_learn(self):
@@ -255,7 +252,7 @@ class KeyboardManager:
         ui.msg_queue.put(('open_quick_learn', selected_text or "", on_saved))
 
     def trigger_rephrase(self):
-        """觸發桌面反白文字重新修飾與潤飾 (支援 F8 與 Alt+~ 雙模態)"""
+        """觸發桌面反白文字重新修飾與潤飾 (以 Alt+~ 為專屬熱鍵，免 Fn、徹底根除飛航模式衝突)"""
         import ctypes
         target_hwnd = ctypes.windll.user32.GetForegroundWindow()
         selected_text, old_clip = self._get_selected_text()
@@ -268,13 +265,6 @@ class KeyboardManager:
             args=(selected_text, old_clip, target_hwnd),
             daemon=True
         ).start()
-
-    def process_f8(self):
-        if self.shift_pressed:
-            # Shift + F8 已依指示徹底拔除，不觸發極速糾錯
-            return
-        # 純 F8: 選取文字重新修飾
-        self.trigger_rephrase()
 
     def process_audio_thread(self, file_path, duration_sec, app_context=None, target_hwnd=None, ambient_context=""):
         record = HistoryRecord(
@@ -615,12 +605,7 @@ class KeyboardManager:
             if _is_alt(key):
                 self.alt_pressed = True
 
-            if _is_f8(key):
-                if not self.f8_pressed:
-                    self.f8_pressed = True
-                    self.process_f8()
-
-            elif _is_tilde(key):
+            if _is_tilde(key):
                 if self.ctrl_pressed:
                     if not getattr(self, 'ctrl_tilde_pressed', False):
                         self.ctrl_tilde_pressed = True
@@ -657,8 +642,6 @@ class KeyboardManager:
                 self.ctrl_pressed = False
             if _is_alt(key):
                 self.alt_pressed = False
-            if _is_f8(key):
-                self.f8_pressed = False
             if _is_tilde(key):
                 self.ctrl_tilde_pressed = False
                 self.alt_tilde_pressed = False
@@ -722,9 +705,9 @@ class KeyboardManager:
         self._watchdog_thread.start()
         
         print("[Keyboard] Hotkey listener started:")
-        print("  1. <右手邊 Alt> 或 <~ 波浪鍵> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
+        print("  1. <~ 波浪鍵> 或 <右手邊 Alt> : 語音輸入主熱鍵 (支援單擊切換 / 長按放開雙模態，底層防失焦阻截)")
         print("  2. <Ctrl + ~>                 : 桌面極速糾錯教學與自適應學習 (重要性第二！)")
-        print("  3. <F8> 或 <Alt + ~>          : 桌面反白文字重新修飾 (筆電免 Fn)")
+        print("  3. <Alt + ~>                  : 桌面反白文字重新修飾 (免 Fn、徹底根除飛航模式衝突)")
 
     def stop(self):
         self._watchdog_running = False

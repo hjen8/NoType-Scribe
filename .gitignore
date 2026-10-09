@@ -7,6 +7,7 @@ env/
 scratch/
 models/
 *.bin
+*_V0*
 
 # Skill Data (NEVER commit - contains auth and personal notebooks!)
 data/
