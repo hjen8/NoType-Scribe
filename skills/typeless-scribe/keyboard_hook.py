@@ -2,6 +2,10 @@ import threading
 from pynput import keyboard
 import pyperclip
 import time
+import pyautogui
+# 物理關閉 PyAutoGUI FailSafe 防暴衝保護：NoType 僅使用純鍵盤 hotkey('ctrl', 'v')，絕無自動滑鼠移動代碼
+# 徹底根除當滑鼠游標停留在螢幕四角或延伸螢幕邊緣時引發 FailSafeException 阻截文字貼上
+pyautogui.FAILSAFE = False
 from ui_manager import ui
 from audio_logic import AudioRecorder
 from groq_api import transcribe_audio, generate_notes, safe_print
@@ -118,6 +122,7 @@ class KeyboardManager:
 
     def _get_selected_text(self):
         import pyautogui
+        pyautogui.FAILSAFE = False
         old_clip = ""
         try:
             old_clip = pyperclip.paste()
@@ -167,6 +172,7 @@ class KeyboardManager:
     def _force_focus_and_paste(self, target_hwnd, text, wrong_text=None, old_clip=None):
         import ctypes
         import pyautogui
+        pyautogui.FAILSAFE = False
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
         
@@ -357,6 +363,7 @@ class KeyboardManager:
             time.sleep(0.1)  # 確保 Windows 剪貼簿已經準備好
             
             import pyautogui
+            pyautogui.FAILSAFE = False
             # 釋放修飾鍵防護
             for k in ['shift', 'alt', 'altright', 'ctrl']:
                 try:
