@@ -6,8 +6,8 @@
  * 1. 接收手機錄製的音訊檔 (.m4a, .wav)
  * 2. 轉發 Groq Whisper (whisper-large-v3-turbo) 進行極速語音辨識 (< 0.5s)
  * 3. 自動動態同步 GitHub 上的 dictionary.txt (專屬自訂字典) 與 corrections.json (自癒學習庫)
- * 4. 呼叫 Groq Llama 3.3 進行臺灣繁體化、去贅字、標點符號與專屬術語校正
- * 5. 二次比對自癒學習庫精準替換
+ * 4. 呼叫 Groq 在線模型 (qwen/qwen3.8-27b 與 openai/gpt-oss-120b 輪詢容錯) 進行臺灣繁體化、去贅字、親友學生姓名絕對優先校正
+ * 5. 二次比對自癒學習庫精準替換 (支援字串與物件結構安全替換，杜絕 [object Object])
  * 6. 回傳修飾完成的純文字，iOS 捷徑可直接寫入剪貼簿！
  */
 
@@ -15,15 +15,16 @@ const GITHUB_DICT_URL = "https://raw.githubusercontent.com/hjen8/NoType-Scribe/m
 const GITHUB_CORR_URL = "https://raw.githubusercontent.com/hjen8/NoType-Scribe/main/skills/typeless-scribe/corrections.json";
 
 // 快取機制：避免每次請求都重複向 GitHub 發送請求 (快取 5 分鐘)
-let cachedDict = null;
+let cachedNames = [];
+let cachedGeneralWords = [];
 let cachedCorr = null;
 let lastCacheTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 async function getDictionaryAndCorrections() {
   const now = Date.now();
-  if (cachedDict && cachedCorr && (now - lastCacheTime < CACHE_TTL_MS)) {
-    return { dictionary: cachedDict, corrections: cachedCorr };
+  if (cachedNames.length > 0 && cachedCorr && (now - lastCacheTime < CACHE_TTL_MS)) {
+    return { names: cachedNames, generalWords: cachedGeneralWords, corrections: cachedCorr };
   }
 
   try {
@@ -34,14 +35,24 @@ async function getDictionaryAndCorrections() {
 
     if (dictRes.ok) {
       const dictText = await dictRes.text();
-      // 解析 dictionary.txt：過濾註解 (#) 與分類標題 (===)
-      cachedDict = dictText
-        .split("\n")
-        .map(line => line.trim())
-        .filter(line => line && !line.startsWith("#") && !line.startsWith("===") && !line.startsWith("["))
-        .join("、");
-    } else {
-      cachedDict = cachedDict || "";
+      const lines = dictText.split("\n").map(l => l.trim());
+      let isNameSection = false;
+      const names = [];
+      const general = [];
+      for (const line of lines) {
+        if (!line || line.startsWith("===") || line.startsWith("[")) continue;
+        if (line.startsWith("#")) {
+          isNameSection = /人名|學生|親友|家人/.test(line);
+          continue;
+        }
+        if (isNameSection) {
+          if (!names.includes(line)) names.push(line);
+        } else {
+          if (!general.includes(line)) general.push(line);
+        }
+      }
+      cachedNames = names;
+      cachedGeneralWords = general;
     }
 
     if (corrRes.ok) {
@@ -53,11 +64,10 @@ async function getDictionaryAndCorrections() {
     lastCacheTime = now;
   } catch (err) {
     console.error("Failed to fetch dictionary/corrections from GitHub:", err);
-    cachedDict = cachedDict || "";
     cachedCorr = cachedCorr || {};
   }
 
-  return { dictionary: cachedDict, corrections: cachedCorr };
+  return { names: cachedNames, generalWords: cachedGeneralWords, corrections: cachedCorr };
 }
 
 export default {
@@ -91,10 +101,12 @@ export default {
 
     // 2. 檢視目前已快取的字典
     if (url.pathname === "/dictionary") {
-      const { dictionary, corrections } = await getDictionaryAndCorrections();
+      const { names, generalWords, corrections } = await getDictionaryAndCorrections();
       return new Response(JSON.stringify({
-        cachedWords: dictionary,
-        correctionsMap: corrections,
+        cachedNames: names,
+        cachedWords: generalWords.slice(-100).join("、"),
+        totalWordsCount: generalWords.length + names.length,
+        correctionsMapCount: Object.keys(corrections || {}).length,
         lastCacheTime: new Date(lastCacheTime).toISOString()
       }, null, 2), {
         headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" }
@@ -154,48 +166,73 @@ export default {
         }
 
         // --- Step 2: 獲取最新專屬字典與自癒學習庫 ---
-        const { dictionary, corrections } = await getDictionaryAndCorrections();
+        const { names, generalWords, corrections } = await getDictionaryAndCorrections();
 
-        // --- Step 3: 呼叫 Groq Llama 3.3 進行臺灣繁體潤飾與標點斷句 ---
+        // --- Step 3: 呼叫 Groq 模型進行臺灣繁體潤飾與標點斷句 ---
+        let namePrompt = "";
+        if (names && names.length > 0) {
+          namePrompt = `\n【親友學生姓名清單（最高權重）】：\n[${names.join("、")}]\n★【人名絕對最高權重】：若出現任何與上述姓名「發音相同、同音異字或極度相近」的詞彙（例如文培憶、文培藝、培憶、培藝替換為文培亦或培亦；沛雲替換為霈沄），必須 100% 強制替換為清單中正確姓名！\n`;
+        }
+
+        const dictSample = (generalWords || []).slice(-100).join("、");
         const systemPrompt = `你是一個專業的語音輸入文本潤飾助理。你的任務是將語音轉錄的原始文字整理為流暢、自然的臺灣標準正體中文。
 嚴格遵守以下準則：
-1. 【100% 臺灣繁體中文】：嚴禁出現任何簡體字或中國大陸用語（例如：「質量」請依語意改為「品質」或保留「物理質量」、「信息」改為「資訊」、「本格拉」改為「本吉拉」）。
-2. 【專屬自訂術語強制遵守】：語音轉錄若出現相關詞彙，必須嚴格匹配以下專屬字典：
-${dictionary || "（目前無自訂術語）"}
-3. 【自適應標點符號與斷句】：依據中文語意自然加入標點符號（，、。！？），禁止每句話都以逗號到底。
-4. 【去除贅字與口語結巴】：去除「那個、嗯、啊、就是說、然後」等無意義口頭禪與結巴重複。
-5. 【極致純淨輸出】：嚴禁任何多餘的問候、寒暄、引言、代碼區塊或解釋，只輸出最終潤飾後的純文字！`;
+1. 【100% 臺灣繁體中文】：嚴禁出現任何簡體字或中國大陸用語。${namePrompt}
+2. 【專屬領域詞彙規範】：
+${dictSample || "（無自訂術語）"}
+3. 【自適應標點符號與斷句】：依據中文語意自然加入標點符號（，、。！？），短句結尾不加句號。
+4. 【去除贅字與口語結巴】：去除「那個、嗯、啊、就是說」等無意義口頭禪，保留承接連詞「然後」。
+5. 【極致純淨輸出】：只輸出最終潤飾後的純文字，絕對禁止多餘說明或標籤！`;
 
-        const chatRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${groqApiKey}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: rawText }
-            ],
-            temperature: 0.1,
-            max_tokens: 1024
-          })
-        });
-
+        // 候選在線模型輪詢 (Primary: Qwen 2.5 27B, Fallback: GPT-OSS 120B)
+        const candidateModels = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b"];
         let polishedText = rawText;
-        if (chatRes.ok) {
-          const chatJson = await chatRes.json();
-          if (chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message) {
-            polishedText = chatJson.choices[0].message.content.trim();
+
+        for (const model of candidateModels) {
+          try {
+            const bodyPayload = {
+              model: model,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: rawText }
+              ],
+              temperature: 0.1,
+              max_tokens: 500
+            };
+            if (model.includes("gpt-oss")) {
+              bodyPayload.reasoning_effort = "low";
+            }
+
+            const chatRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${groqApiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(bodyPayload)
+            });
+
+            if (chatRes.ok) {
+              const chatJson = await chatRes.json();
+              if (chatJson.choices && chatJson.choices[0] && chatJson.choices[0].message) {
+                polishedText = chatJson.choices[0].message.content.trim();
+                break;
+              }
+            } else {
+              const errBody = await chatRes.text();
+              console.warn(`Model ${model} failed (${chatRes.status}): ${errBody}`);
+            }
+          } catch (modelErr) {
+            console.warn(`Error invoking model ${model}:`, modelErr);
           }
         }
 
         // --- Step 4: 自癒學習庫二度精準替換 ---
         if (corrections && Object.keys(corrections).length > 0) {
           for (const [wrong, right] of Object.entries(corrections)) {
-            if (wrong && right && polishedText.includes(wrong)) {
-              polishedText = polishedText.replaceAll(wrong, right);
+            const target = typeof right === "string" ? right : (right && right.correct ? right.correct : null);
+            if (wrong && target && polishedText.includes(wrong)) {
+              polishedText = polishedText.replaceAll(wrong, target);
             }
           }
         }
