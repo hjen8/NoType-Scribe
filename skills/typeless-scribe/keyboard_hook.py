@@ -351,14 +351,7 @@ class KeyboardManager:
                     pass
                 time.sleep(0.08)
             
-            # 備份使用者原本的剪貼簿內容 (僅限文字)
-            original_clipboard = ""
-            try:
-                original_clipboard = pyperclip.paste()
-            except Exception:
-                pass
-            
-            # 替換為 AI 修飾後的文字
+            # 替換為 AI 修飾後的文字，並永久保留於剪貼簿供備援手動貼上 (長官隨時按 Ctrl+V 均可貼出)
             pyperclip.copy(refined_text)
             time.sleep(0.1)  # 確保 Windows 剪貼簿已經準備好
             
@@ -370,19 +363,22 @@ class KeyboardManager:
                     pyautogui.keyUp(k)
                 except Exception:
                     pass
+            
+            # 防護：若前態誤觸發 OneNote/Word/Office 功能區 Ribbon 或系統選單，輕按一次 Esc 關閉選單使游標歸位
+            try:
+                import ctypes
+                ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
+                time.sleep(0.02)
+                ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
+            except Exception:
+                pass
+            time.sleep(0.05)
+
             # 模擬送出 Ctrl+V
             pyautogui.hotkey('ctrl', 'v')
             print(f"[OK] Text pasted to cursor! (Mode: {app_mode})")
             
-            # 留緩衝時間讓 Windows 完成貼上動作，再還原原本的剪貼簿
-            time.sleep(0.8)
-            try:
-                if original_clipboard:
-                    pyperclip.copy(original_clipboard)
-            except Exception:
-                pass
-            
-            # 4. 關鍵防護：貼上與剪貼簿還原完全就緒後，才安全通知 UI 刷新歷史面板 (杜絕 Tkinter 凍結導致剪貼簿競態)
+            # 4. 關鍵防護：貼上就緒後，安全通知 UI 刷新歷史面板 (杜絕 Tkinter 凍結導致剪貼簿競態)
             ui.msg_queue.put('refresh_history')
             
         except Exception as e:
@@ -460,6 +456,10 @@ class KeyboardManager:
         self.alt_r_pressed = False
         self.tilde_down_time = 0.0
         self.alt_r_down_time = 0.0
+        self.alt_pressed = False
+        self.ctrl_pressed = False
+        self.alt_tilde_pressed = False
+        self.ctrl_tilde_pressed = False
         
         # 1. 立即關閉錄音懸浮視窗！
         ui.msg_queue.put('hide_floating')
@@ -521,8 +521,11 @@ class KeyboardManager:
                 ctrl_down = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
                 alt_down = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
 
-                is_ctrl = ctrl_down or getattr(self, 'ctrl_pressed', False)
-                is_alt = alt_down or getattr(self, 'alt_pressed', False)
+                # 嚴格取決於物理硬體狀態，徹底杜絕 self.alt_pressed 卡死導致單按 ~ 誤判為 Alt + ~
+                is_ctrl = ctrl_down
+                is_alt = alt_down
+                self.ctrl_pressed = ctrl_down
+                self.alt_pressed = alt_down
 
                 # (1) 筆電免 Fn 專屬熱鍵：Ctrl + ~ (桌面文字極速糾錯學習，有選取填入、無選取手動輸入)
                 if is_ctrl and not is_alt:
@@ -613,11 +616,15 @@ class KeyboardManager:
                 self.alt_pressed = True
 
             if _is_tilde(key):
-                if self.ctrl_pressed:
+                import ctypes
+                user32 = ctypes.windll.user32
+                real_ctrl = (user32.GetAsyncKeyState(0x11) & 0x8000) != 0
+                real_alt = (user32.GetAsyncKeyState(0x12) & 0x8000) != 0
+                if real_ctrl:
                     if not getattr(self, 'ctrl_tilde_pressed', False):
                         self.ctrl_tilde_pressed = True
                         threading.Thread(target=self.trigger_quick_learn, daemon=True).start()
-                elif self.alt_pressed:
+                elif real_alt:
                     if not getattr(self, 'alt_tilde_pressed', False):
                         self.alt_tilde_pressed = True
                         threading.Thread(target=self.trigger_rephrase, daemon=True).start()
