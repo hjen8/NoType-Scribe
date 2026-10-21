@@ -45,6 +45,8 @@ copy /y "%DROPBOX_SRC%*.py" "%SKILL_DIR%\" >nul
 copy /y "%DROPBOX_SRC%*.json" "%SKILL_DIR%\" >nul
 copy /y "%DROPBOX_SRC%*.txt" "%SKILL_DIR%\" >nul
 copy /y "%DROPBOX_SRC%*.bat" "%TARGET_DIR%\" >nul
+copy /y "%DROPBOX_SRC%*.vbs" "%SKILL_DIR%\" >nul
+copy /y "%DROPBOX_SRC%*.vbs" "%TARGET_DIR%\" >nul
 
 echo [OK] Files copied successfully!
 echo.
