@@ -73,7 +73,9 @@ class KeyboardManager:
         success = self.recorder.reset_audio_engine()
         if success:
             try:
-                ui.toast("⚡ 系統喚醒：音訊串流已全自動重連！", is_error=False, duration=2500)
+                # 若為裝置硬體變更且正在錄音中，reset 已被安全延後，不彈出非預期的系統喚醒提示
+                if not getattr(self.recorder, '_pending_reset', False):
+                    ui.toast("⚡ 系統喚醒：音訊串流已全自動重連！", is_error=False, duration=2500)
             except Exception as e:
                 safe_print(f"[Power] UI toast error: {e}")
 
@@ -335,44 +337,54 @@ class KeyboardManager:
             record.refined_text = refined_text
             add_record(record)
             
-            # 確保焦點鎖定在原本說話的視窗
+            # 確保焦點鎖定在原本說話的視窗 (若本來就在前景，不重置以保護 Electron/Webview 內部游標)
             if target_hwnd:
                 try:
                     import ctypes
-                    cur_th = ctypes.windll.kernel32.GetCurrentThreadId()
-                    tgt_th = ctypes.windll.user32.GetWindowThreadProcessId(target_hwnd, None)
-                    if cur_th != tgt_th:
-                        ctypes.windll.user32.AttachThreadInput(cur_th, tgt_th, True)
-                        ctypes.windll.user32.SetForegroundWindow(target_hwnd)
-                        ctypes.windll.user32.AttachThreadInput(cur_th, tgt_th, False)
-                    else:
-                        ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                    fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                    if fg_hwnd != target_hwnd:
+                        cur_th = ctypes.windll.kernel32.GetCurrentThreadId()
+                        tgt_th = ctypes.windll.user32.GetWindowThreadProcessId(target_hwnd, None)
+                        if cur_th != tgt_th:
+                            ctypes.windll.user32.AttachThreadInput(cur_th, tgt_th, True)
+                            ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                            ctypes.windll.user32.AttachThreadInput(cur_th, tgt_th, False)
+                        else:
+                            ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                        time.sleep(0.05)
                 except Exception:
                     pass
-                time.sleep(0.08)
             
             # 替換為 AI 修飾後的文字，並永久保留於剪貼簿供備援手動貼上 (長官隨時按 Ctrl+V 均可貼出)
             pyperclip.copy(refined_text)
-            time.sleep(0.1)  # 確保 Windows 剪貼簿已經準備好
+            time.sleep(0.08)  # 確保 Windows 剪貼簿已經準備好
             
             import pyautogui
             pyautogui.FAILSAFE = False
-            # 釋放修飾鍵防護
-            for k in ['shift', 'alt', 'altright', 'ctrl']:
-                try:
-                    pyautogui.keyUp(k)
-                except Exception:
-                    pass
-            
-            # 防護：若前態誤觸發 OneNote/Word/Office 功能區 Ribbon 或系統選單，輕按一次 Esc 關閉選單使游標歸位
+            # 僅在修飾鍵物理處於按下狀態時才釋放，杜絕盲發 keyUp('alt') 觸發 Windows/VS Code 選單列焦點搶奪
             try:
                 import ctypes
-                ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
-                time.sleep(0.02)
-                ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
+                user32 = ctypes.windll.user32
+                for vk, name in [(0x10, 'shift'), (0x11, 'ctrl'), (0x12, 'alt')]:
+                    if (user32.GetAsyncKeyState(vk) & 0x8000) != 0:
+                        try:
+                            pyautogui.keyUp(name)
+                        except Exception:
+                            pass
             except Exception:
                 pass
-            time.sleep(0.05)
+            
+            # 防護：僅在 OneNote/Word/Office 時輕按 Esc 關閉 Ribbon 功能區選單；嚴禁在 VS Code/Antigravity/瀏覽器發送 Esc 導致對話框失焦瓦解
+            app_name = (app_context.get('name') or '').lower() if app_context else ''
+            if any(office_exe in app_name for office_exe in ('onenote', 'winword', 'excel', 'powerpnt')):
+                try:
+                    import ctypes
+                    ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
+                    time.sleep(0.02)
+                    ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
+                    time.sleep(0.03)
+                except Exception:
+                    pass
 
             # 模擬送出 Ctrl+V
             pyautogui.hotkey('ctrl', 'v')
@@ -499,6 +511,10 @@ class KeyboardManager:
                     ui.toast("🔇 麥克風音量過小，請靠近麥克風或調大輸入音量", is_error=True, duration=3500)
                 elif reason == "no_data":
                     ui.toast("⚠️ 麥克風未擷取到音訊，請檢查 Windows 麥克風權限", is_error=True, duration=3500)
+                elif reason == "not_recording":
+                    ui.toast("⚠️ 錄音狀態異常或已被提前結束，請再按一次重試", is_error=True, duration=3000)
+                else:
+                    ui.toast(f"⚠️ 錄音未完成 ({reason})，請再試一次", is_error=True, duration=3000)
                 
             try:
                 from backup_manager import sync_device_diagnostics

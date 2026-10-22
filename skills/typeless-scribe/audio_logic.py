@@ -19,14 +19,22 @@ class AudioRecorder:
         self.recording = False
         self.stream = None
         self.start_time = 0
+        self._pending_reset = False
 
     def callback(self, indata, frames, time, status):
         if status:
             print(f"[Audio] warning: {status}")
         self.q.put(indata.copy())
 
-    def reset_audio_engine(self):
+    def reset_audio_engine(self, force=False):
         """重置底層 PortAudio 引擎與當前錄音串流 (用於休眠喚醒或裝置插拔時)"""
+        # 防踩踏安全閥：若當前正在錄音中且非強制重置，將重置延後至錄音交付完畢後執行
+        if self.recording and not force:
+            print("[Audio] Active recording in progress; deferring audio pipeline reset until recording completes.")
+            self._pending_reset = True
+            return True
+
+        self._pending_reset = False
         try:
             if self.stream is not None:
                 try:
@@ -49,6 +57,12 @@ class AudioRecorder:
         except Exception as e:
             print(f"[Audio] Reinitialize audio pipeline failed: {e}")
             return False
+
+    def _check_and_run_pending_reset(self):
+        """若錄音期間有延後的音訊引擎重置請求，在此安全執行"""
+        if getattr(self, '_pending_reset', False):
+            print("[Audio] Executing deferred audio pipeline reset after recording finished...")
+            self.reset_audio_engine(force=True)
 
     def start_recording(self):
         self.recording = True
@@ -81,6 +95,7 @@ class AudioRecorder:
     def stop_recording(self):
         """停止錄音，回傳 (file_path, duration_sec, reason) 或 (None, 0, reason)"""
         if not self.recording:
+            self._check_and_run_pending_reset()
             return None, 0, "not_recording"
         
         self.recording = False
@@ -100,6 +115,7 @@ class AudioRecorder:
         # 防呆：錄音時間太短，視為誤觸
         if duration < MIN_RECORD_SECONDS:
             print(f"[Audio] Recording only {duration:.1f}s, below {MIN_RECORD_SECONDS}s threshold, ignored.")
+            self._check_and_run_pending_reset()
             return None, 0, "too_short"
         
         audio_data = []
@@ -108,6 +124,7 @@ class AudioRecorder:
             
         if not audio_data:
             print("[Audio] No audio data captured.")
+            self._check_and_run_pending_reset()
             return None, 0, "no_data"
             
         audio_data = np.concatenate(audio_data, axis=0)
@@ -116,6 +133,7 @@ class AudioRecorder:
         rms = float(np.sqrt(np.mean(audio_data ** 2)))
         if rms < SILENCE_THRESHOLD:
             print(f"[Audio] Volume too low (RMS={rms:.4f}), ignored.")
+            self._check_and_run_pending_reset()
             return None, 0, f"silence_{rms:.4f}"
         
         # 儲存到音檔快取目錄 (帶時間戳)
@@ -132,7 +150,9 @@ class AudioRecorder:
                 sf.write(output_path, audio_data, self.samplerate)
             except Exception as e2:
                 print(f"[Audio] Critical: Audio write failed completely ({e2})")
+                self._check_and_run_pending_reset()
                 return None, 0, "write_failed"
 
         print(f"[Audio] Recorded {duration:.1f}s (RMS={rms:.4f}) -> {output_path}")
+        self._check_and_run_pending_reset()
         return output_path, round(duration, 1), "ok"
