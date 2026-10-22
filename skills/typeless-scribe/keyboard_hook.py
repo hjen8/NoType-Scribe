@@ -374,19 +374,7 @@ class KeyboardManager:
             except Exception:
                 pass
             
-            # 防護：僅在 OneNote/Word/Office 時輕按 Esc 關閉 Ribbon 功能區選單；嚴禁在 VS Code/Antigravity/瀏覽器發送 Esc 導致對話框失焦瓦解
-            app_name = (app_context.get('name') or '').lower() if app_context else ''
-            if any(office_exe in app_name for office_exe in ('onenote', 'winword', 'excel', 'powerpnt')):
-                try:
-                    import ctypes
-                    ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)
-                    time.sleep(0.02)
-                    ctypes.windll.user32.keybd_event(0x1B, 0, 2, 0)
-                    time.sleep(0.03)
-                except Exception:
-                    pass
-
-            # 模擬送出 Ctrl+V
+            # 模擬送出 Ctrl+V (純粹貼上，零按鍵干擾，確保游標與各應用程式內部選取狀態 100% 穩定)
             pyautogui.hotkey('ctrl', 'v')
             print(f"[OK] Text pasted to cursor! (Mode: {app_mode})")
             
