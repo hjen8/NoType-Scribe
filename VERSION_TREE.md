@@ -1,9 +1,9 @@
 # 🌲 NoType 歷史版本樹 (Project Version Tree)
 
 > **核心定位**：本文件與專案說明書 (`README.md` / `ANTIGRAVITY.md`) 具同等級核心地位。  
-> 📌 **當前身處分支**：`main` (HEAD -> `e410c65`)  
+> 📌 **當前身處分支**：`main` (HEAD -> `9fb751d`)  
 > 🚦 **工作區狀態**：✅ 工作目錄整潔 (Clean)  
-> 🕒 **最後更新時間**：`2026-10-21 23:05:12`
+> 🕒 **最後更新時間**：`2026-10-22 09:13:19`
 
 ---
 
@@ -16,20 +16,18 @@ flowchart TD
     classDef default fill:#f8f9fa,stroke:#495057,stroke-width:1.8px,color:#212529,font-size:13px;
     classDef current fill:#ffebee,stroke:#c00000,stroke-width:3px,color:#900,font-weight:bold,font-size:13px;
     classDef mergeNode fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1,font-size:13px;
-    n_e1c1c9f(["1. 【修復】根治手機端學生姓名辨識偏誤：Cl.."]):::default
-    n_b75d44f(["2. 【文件】同步 VERSION_TREE..."]):::default
-    n_79089d2(["3. 【文件】同步收工版本樹 VERSION_.."]):::default
-    n_0029f92(["4. 【文件】同步 VERSION_TREE..."]):::default
-    n_aa9902c(["5. 【文件】最終收工同步 VERSION_T.."]):::default
-    n_fcd881b(["6. 【修復】run_hidden.vbs 改.."]):::default
-    n_2a21125(["7. 【文件】同步 VERSION_TREE..."]):::default
-    n_a22a9d3(["8. 【修復】UPDATE_NOTEBOOK..."]):::default
-    n_95a7624(["9. 【文件】同步 VERSION_TREE..."]):::default
-    n_aef1404(["10. 【修復】徹底根除 Alt 鍵盤狀態卡死 .."]):::default
-    n_e84eb66(["11. 【文件】同步 VERSION_TREE..."]):::default
-    n_e410c65(["12. 【文件】最終收工同步 VERSION_T.."]):::current
-    n_e1c1c9f --> n_b75d44f
-    n_b75d44f --> n_79089d2
+    n_79089d2(["1. 【文件】同步收工版本樹 VERSION_.."]):::default
+    n_0029f92(["2. 【文件】同步 VERSION_TREE..."]):::default
+    n_aa9902c(["3. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_fcd881b(["4. 【修復】run_hidden.vbs 改.."]):::default
+    n_2a21125(["5. 【文件】同步 VERSION_TREE..."]):::default
+    n_a22a9d3(["6. 【修復】UPDATE_NOTEBOOK..."]):::default
+    n_95a7624(["7. 【文件】同步 VERSION_TREE..."]):::default
+    n_aef1404(["8. 【修復】徹底根除 Alt 鍵盤狀態卡死 .."]):::default
+    n_e84eb66(["9. 【文件】同步 VERSION_TREE..."]):::default
+    n_84b947b(["10. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_8774d72(["11. 【修復】實裝錄音狀態感知防踩踏安全閥與異.."]):::default
+    n_9fb751d(["12. 【文件】最終收工同步 VERSION_T.."]):::current
     n_79089d2 --> n_0029f92
     n_0029f92 --> n_aa9902c
     n_aa9902c --> n_fcd881b
@@ -38,7 +36,9 @@ flowchart TD
     n_a22a9d3 --> n_95a7624
     n_95a7624 --> n_aef1404
     n_aef1404 --> n_e84eb66
-    n_e84eb66 --> n_e410c65
+    n_e84eb66 --> n_84b947b
+    n_84b947b --> n_8774d72
+    n_8774d72 --> n_9fb751d
 ```
 
 ---
@@ -48,18 +48,20 @@ flowchart TD
 
 | 編號 (No.) | 存檔ID (Hash) | 提交時間 | 分支/標籤 | 說明 (Commit Message) | 時光機指令 (前往此版本) |
 | :---: | :---: | :---: | :---: | :--- | :--- |
-| **12** | `e410c65` | 2026-10-21 23:05 |  `HEAD -> main` | 【文件】最終收工同步 VERSION_TREE.md | `git checkout e410c65` |
-| **11** | `e84eb66` | 2026-10-21 22:31 |  `origin/main, origin/HEAD` | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout e84eb66` |
-| **10** | `aef1404` | 2026-10-21 22:30 |  | 【修復】徹底根除 Alt 鍵盤狀態卡死 根治 ~ 誤判反白修飾與 OneNote 自動貼上失效，並永久保全剪貼簿 | `git checkout aef1404` |
-| **9** | `95a7624` | 2026-10-21 21:53 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout 95a7624` |
-| **8** | `a22a9d3` | 2026-10-21 21:52 |  | 【修復】UPDATE_NOTEBOOK.bat 智慧探測 Dropbox 目錄、內建 GitHub 回退與 run_hidden.vbs 硬性保全 | `git checkout a22a9d3` |
-| **7** | `2a21125` | 2026-10-21 21:39 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout 2a21125` |
-| **6** | `fcd881b` | 2026-10-21 21:39 |  | 【修復】run_hidden.vbs 改為 FSO 全動態相對路徑，徹底根除筆電 8007000F 報錯，並於 UPDATE_NOTEBOOK.bat 納入 vbs 同步 | `git checkout fcd881b` |
-| **5** | `aa9902c` | 2026-10-19 02:01 |  | 【文件】最終收工同步 VERSION_TREE.md 0029f92 | `git checkout aa9902c` |
-| **4** | `0029f92` | 2026-10-19 01:47 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 79089d2 | `git checkout 0029f92` |
-| **3** | `79089d2` | 2026-10-19 01:47 |  | 【文件】同步收工版本樹 VERSION_TREE.md b75d44f | `git checkout 79089d2` |
-| **2** | `b75d44f` | 2026-10-19 01:23 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 e1c1c9f | `git checkout b75d44f` |
-| **1** | `e1c1c9f` | 2026-10-19 01:23 |  | 【修復】根治手機端學生姓名辨識偏誤：Cloudflare Worker 更換在線模型輪詢容錯、人名獨立提權最高 Prompt、自癒映射注入文培亦與物件替換防護 | `git checkout e1c1c9f` |
+| **12** | `9fb751d` | 2026-10-22 09:13 |  `HEAD -> main` | 【文件】最終收工同步 VERSION_TREE.md HEAD -> 8774d72 | `git checkout 9fb751d` |
+| **11** | `8774d72` | 2026-10-22 09:12 |  | 【修復】實裝錄音狀態感知防踩踏安全閥與異質應用焦點隔離 根治 DevNodesChanged 中斷與 VSCode/Antigravity 對話框失焦 | `git checkout 8774d72` |
+| **10** | `84b947b` | 2026-10-21 23:05 |  `origin/main, origin/HEAD` | 【文件】最終收工同步 VERSION_TREE.md | `git checkout 84b947b` |
+| **9** | `e84eb66` | 2026-10-21 22:31 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout e84eb66` |
+| **8** | `aef1404` | 2026-10-21 22:30 |  | 【修復】徹底根除 Alt 鍵盤狀態卡死 根治 ~ 誤判反白修飾與 OneNote 自動貼上失效，並永久保全剪貼簿 | `git checkout aef1404` |
+| **7** | `95a7624` | 2026-10-21 21:53 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout 95a7624` |
+| **6** | `a22a9d3` | 2026-10-21 21:52 |  | 【修復】UPDATE_NOTEBOOK.bat 智慧探測 Dropbox 目錄、內建 GitHub 回退與 run_hidden.vbs 硬性保全 | `git checkout a22a9d3` |
+| **5** | `2a21125` | 2026-10-21 21:39 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout 2a21125` |
+| **4** | `fcd881b` | 2026-10-21 21:39 |  | 【修復】run_hidden.vbs 改為 FSO 全動態相對路徑，徹底根除筆電 8007000F 報錯，並於 UPDATE_NOTEBOOK.bat 納入 vbs 同步 | `git checkout fcd881b` |
+| **3** | `aa9902c` | 2026-10-19 02:01 |  | 【文件】最終收工同步 VERSION_TREE.md 0029f92 | `git checkout aa9902c` |
+| **2** | `0029f92` | 2026-10-19 01:47 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 79089d2 | `git checkout 0029f92` |
+| **1** | `79089d2` | 2026-10-19 01:47 |  | 【文件】同步收工版本樹 VERSION_TREE.md b75d44f | `git checkout 79089d2` |
+| **-** | `b75d44f` | 2026-10-19 01:23 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 e1c1c9f | `git checkout b75d44f` |
+| **-** | `e1c1c9f` | 2026-10-19 01:23 |  | 【修復】根治手機端學生姓名辨識偏誤：Cloudflare Worker 更換在線模型輪詢容錯、人名獨立提權最高 Prompt、自癒映射注入文培亦與物件替換防護 | `git checkout e1c1c9f` |
 | **-** | `9480dc7` | 2026-10-15 10:18 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 9ebe870 | `git checkout 9480dc7` |
 | **-** | `9ebe870` | 2026-10-15 10:18 |  | 【修復】根除 PyAutoGUI fail-safe 角落貼上阻截，Prompt Token 瘦身 65% 並加固 Groq 429 自癒冷卻 | `git checkout 9ebe870` |
 | **-** | `d139599` | 2026-10-09 20:19 |  | 【文件】更新 VERSION_TREE.md 拓撲圖 | `git checkout d139599` |
@@ -71,8 +73,6 @@ flowchart TD
 | **-** | `58bbc8c` | 2026-09-28 15:57 |  | 【功能】NoType 移植 iPhone 語音輸入方案 B 圓滿收官：Cloudflare Worker 動態中繼、iOS 雙手勢快捷輸入與 SayIt 歷史抽屜落成 | `git checkout 58bbc8c` |
 | **-** | `47c4704` | 2026-09-28 13:49 |  | 【文件】record Cloudflare account hjen84@gmail.com | `git checkout 47c4704` |
 | **-** | `18e4ca1` | 2026-09-28 13:44 |  | 【功能】add 版本樹 to dictionary 與 corrections | `git checkout 18e4ca1` |
-| **-** | `a05b1df` | 2026-09-28 13:44 |  | 【功能】add Cloudflare Worker relay 與 iOS shortcut deployment guide without secrets | `git checkout a05b1df` |
-| **-** | `4a3ea27` | 2026-09-28 02:49 |  | 【維護】update requirements.txt | `git checkout 4a3ea27` |
 
 ---
 
@@ -83,8 +83,10 @@ flowchart TD
 
 ### 4. 終端完整拓撲圖 (Terminal ASCII Graph)
 ```text
-* e410c65 (HEAD -> main) docs: 最終收工同步 VERSION_TREE.md
-* e84eb66 (origin/main, origin/HEAD) docs: 同步 VERSION_TREE.md 版本樹
+* 9fb751d (HEAD -> main) docs: 最終收工同步 VERSION_TREE.md (HEAD -> 8774d72)
+* 8774d72 fix(audio): 實裝錄音狀態感知防踩踏安全閥與異質應用焦點隔離 (根治 DevNodesChanged 中斷與 VSCode/Antigravity 對話框失焦)
+* 84b947b (origin/main, origin/HEAD) docs: 最終收工同步 VERSION_TREE.md
+* e84eb66 docs: 同步 VERSION_TREE.md 版本樹
 * aef1404 fix(keyboard): 徹底根除 Alt 鍵盤狀態卡死 (根治 ~ 誤判反白修飾與 OneNote 自動貼上失效，並永久保全剪貼簿)
 * 95a7624 docs: 同步 VERSION_TREE.md 版本樹
 * a22a9d3 fix(update): UPDATE_NOTEBOOK.bat 智慧探測 Dropbox 目錄、內建 GitHub 回退與 run_hidden.vbs 硬性保全
@@ -106,8 +108,6 @@ flowchart TD
 * 58bbc8c 【功能】NoType 移植 iPhone 語音輸入方案 B 圓滿收官：Cloudflare Worker 動態中繼、iOS 雙手勢快捷輸入與 SayIt 歷史抽屜落成
 * 47c4704 docs: record Cloudflare account hjen84@gmail.com
 * 18e4ca1 feat(dict): add 版本樹 to dictionary and corrections
-* a05b1df feat(ios): add Cloudflare Worker relay and iOS shortcut deployment guide without secrets
-* 4a3ea27 chore: update requirements.txt
 ```
 
 ---
