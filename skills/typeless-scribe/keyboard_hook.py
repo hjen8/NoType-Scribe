@@ -690,6 +690,30 @@ class KeyboardManager:
             except Exception as e:
                 safe_print(f"[Watchdog Error] {e}")
 
+    def _elevate_listener_priority(self):
+        """將鍵盤鉤子監聽線程優先權提升為 THREAD_PRIORITY_HIGHEST (2)，確保系統在極限高負載時仍即時響應 callback，物理杜絕逾時拔鉤"""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.OpenThread.restype = wintypes.HANDLE
+            kernel32.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel32.SetThreadPriority.argtypes = [wintypes.HANDLE, ctypes.c_int]
+            kernel32.SetThreadPriority.restype = wintypes.BOOL
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
+            
+            if hasattr(self.listener, 'native_id') and self.listener.native_id:
+                h = kernel32.OpenThread(0x0020, False, self.listener.native_id)
+                if h:
+                    if kernel32.SetThreadPriority(h, 2):  # THREAD_PRIORITY_HIGHEST = 2
+                        safe_print(f"[Priority] 鍵盤監聽線程 (TID={self.listener.native_id}) 優先權已成功提升為 THREAD_PRIORITY_HIGHEST (即時響應)")
+                    else:
+                        safe_print(f"[Priority] 提升線程優先權失敗: Error={kernel32.GetLastError()}")
+                    kernel32.CloseHandle(h)
+        except Exception as e:
+            safe_print(f"[Priority] 鍵盤線程優先權提升失敗: {e}")
+
     def restart_listener(self):
         try:
             if self.listener:
@@ -703,6 +727,7 @@ class KeyboardManager:
                 win32_event_filter=self._win32_filter
             )
             self.listener.start()
+            self._elevate_listener_priority()
             safe_print("[Watchdog] ✅ 鍵盤監聽鉤子已成功恢復運作！")
         except Exception as e:
             safe_print(f"[Watchdog] 重啟失敗: {e}")
@@ -714,6 +739,7 @@ class KeyboardManager:
             win32_event_filter=self._win32_filter
         )
         self.listener.start()
+        self._elevate_listener_priority()
         if hasattr(self, 'power_monitor') and self.power_monitor:
             self.power_monitor.start()
             

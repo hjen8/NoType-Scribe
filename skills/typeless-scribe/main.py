@@ -18,6 +18,21 @@ if last_err in (183, 5):  # ERROR_ALREADY_EXISTS or ERROR_ACCESS_DENIED
         kernel32.CloseHandle(_mutex)
     os._exit(0)
 
+# 0.1 物理安全鎖 3：將 NoType 行程優先級提升為 HIGH_PRIORITY_CLASS (0x00000080)
+# 確保作為全域鍵盤監聽與即時語音輸入守護進程，永遠優先於背景轉檔/排查等批次任務，物理杜絕 LowLevelHooksTimeout 逾時拔鉤
+try:
+    from ctypes import wintypes
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.SetPriorityClass.restype = wintypes.BOOL
+    h_proc = kernel32.GetCurrentProcess()
+    if kernel32.SetPriorityClass(h_proc, 0x00000080):
+        print("[Priority] NoType 行程優先權已成功提升為 HIGH_PRIORITY_CLASS (即時優先響應)")
+    else:
+        print(f"[Priority] 提升優先權失敗: Error={kernel32.GetLastError()}")
+except Exception as e:
+    print(f"[Priority] 提升優先權異常: {e}")
+
 from PIL import Image, ImageDraw
 import pystray
 from ui_manager import ui
@@ -64,6 +79,15 @@ def on_open_dictionary_notepad(icon, item):
     import subprocess
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')
     subprocess.Popen(['notepad.exe', dict_path])
+
+kb_manager = None
+
+def on_rehook(icon, item):
+    global kb_manager
+    print("[Tray] 使用者點擊『⚡ 重新掛載鍵盤鉤子』，執行即時自癒...", flush=True)
+    if kb_manager:
+        kb_manager.restart_listener()
+        ui.toast("⚡ 鍵盤鉤子已重新掛載就緒", is_error=False, duration=2000)
 
 def on_restart(icon, item):
     global _mutex
@@ -118,8 +142,9 @@ def run_tray():
             ),
             pystray.MenuItem('API 設定 (API Keys)', on_open_settings),
             pystray.MenuItem('📖 操作說明與快捷鍵 (README)', on_open_help),
-            pystray.MenuItem('離開 (Quit)', on_quit),
-            pystray.MenuItem('🔄 重新啟動 (Restart)', on_restart)
+            pystray.MenuItem('⚡ 重新掛載鍵盤鉤子 (Re-hook)', on_rehook),
+            pystray.MenuItem('🔄 重新啟動 (Restart)', on_restart),
+            pystray.MenuItem('離開 (Quit)', on_quit)
         )
     )
     icon.run()
@@ -146,6 +171,7 @@ def main():
         print("✅ API Key 已從設定檔自動載入，系統準備就緒！")
 
     # 啟動全域熱鍵監聽
+    global kb_manager
     kb_manager = KeyboardManager()
     kb_manager.start()
 
