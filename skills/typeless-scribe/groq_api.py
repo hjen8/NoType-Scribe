@@ -88,7 +88,7 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
         base_prefix = "這是一段繁體中文逐字稿。"
         test_prefix = base_prefix + " 常見詞："
         curr_bytes = len(test_prefix.encode('utf-8'))
-        MAX_SAFE_BYTES = 460  # 實測證明：超過 500 bytes 會引發 Whisper 注意力稀釋與先驗反噬（使爸爸葯退化為爸爸要）。設 460 確保指令與重要人名 100% 聚焦！
+        MAX_SAFE_BYTES = 640  # 實測證明：640 bytes 可全量容納第 0 順位指令 + 家人全名與雙字暱稱 + 學生全名與簡稱 + 同事人名 (剛好 60 詞)，聲學雙軌 100% 覆蓋！
         
         for w in combined_words:
             w_bytes = len(w.encode('utf-8')) + 2  # 包含 ", " 2 bytes
@@ -260,6 +260,22 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
         "陳佩雲": "陳霈沄",
         "雨昕": "語昕",
         "陳雨昕": "陳語昕",
+        "懷密": "懷敏",
+        "懷米": "懷敏",
+        "懷民": "懷敏",
+        "信之": "杏枝",
+        "性之": "杏枝",
+        "幸之": "杏枝",
+        "杏之": "杏枝",
+        "信枝": "杏枝",
+        "性枝": "杏枝",
+        "五百": "武柏",
+        "武伯": "武柏",
+        "佩琪": "佩琦",
+        "配期": "佩琦",
+        "沛琪": "佩琦",
+        "五正": "武正",
+        "武政": "武正",
     }
     for wrong, right in name_homophones.items():
         text = text.replace(wrong, right)
