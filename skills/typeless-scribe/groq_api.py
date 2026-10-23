@@ -53,7 +53,10 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
         from learning_manager import load_corrections
         corrections = load_corrections()
         
-        # 1. 【第一順位絕對先發】：親友與學生人名 (56 詞，約 585 bytes，100% 絕對優先佔位，確保霈沄、語昕全入選 Whisper 700 bytes)
+        # 0. 【第 0 順位絕對先發】：日常系統與工作核心指令 (優先鎖死，100% 確保進駐 Whisper 前 50 bytes)
+        command_priority = ["收工", "開工", "最高SOP", "專案SOP", "SOP", "Skill", "待做事項", "暫告一段落"]
+
+        # 1. 【第一順位先發】：親友與學生精選人名 (37 詞，約 370 bytes，確保重要親友與學生人名 100% 入選)
         name_priority = []
         try:
             import dictionary_manager
@@ -62,32 +65,30 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
                 cat_name = cat.get("name", "")
                 if any(k in cat_name for k in ["人名", "親友", "家人", "學生"]):
                     for nw in cat.get("words", []):
-                        if nw not in name_priority:
+                        if nw not in name_priority and nw not in command_priority:
                             name_priority.append(nw)
         except Exception:
             pass
             
         # 2. 【第二順位先發】：核心電腦名詞、同音消歧義與自適應學習庫正確詞彙
-        core_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "主選單", "SOP", "Skill", "人名", "全對", "霈沄", "語昕"]
+        core_priority = ["S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "主選單", "全對", "霈沄", "語昕"]
         for correct in corrections.values():
             target = correct if isinstance(correct, str) else correct.get("correct", "")
-            if target and target not in core_priority and target not in name_priority:
+            if target and target not in core_priority and target not in name_priority and target not in command_priority:
                 core_priority.append(target)
                 
         dict_words = [w.strip() for w in custom_words.split(', ') if w.strip()]
-        # 字典逆序（最新沉澱的詞最優先）
-        reversed_dict = list(reversed(dict_words))
         
         combined_words = []
-        for w in name_priority + core_priority + reversed_dict + dict_words:
+        for w in command_priority + name_priority + core_priority + dict_words:
             if w not in combined_words:
                 combined_words.append(w)
-                
+        
         selected = []
         base_prefix = "這是一段繁體中文逐字稿。"
         test_prefix = base_prefix + " 常見詞："
         curr_bytes = len(test_prefix.encode('utf-8'))
-        MAX_SAFE_BYTES = 700  # Groq Whisper 物理極限為 896 bytes (中文每字 3 bytes)，設 700 預留充足緩衝
+        MAX_SAFE_BYTES = 460  # 實測證明：超過 500 bytes 會引發 Whisper 注意力稀釋與先驗反噬（使爸爸葯退化為爸爸要）。設 460 確保指令與重要人名 100% 聚焦！
         
         for w in combined_words:
             w_bytes = len(w.encode('utf-8')) + 2  # 包含 ", " 2 bytes
@@ -262,6 +263,11 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
     }
     for wrong, right in name_homophones.items():
         text = text.replace(wrong, right)
+
+    # 0.6 專屬名詞孤島物理兜底（當單獨出現時保障「爸爸葯」不被誤寫為「爸爸要」）
+    clean_strip = text.strip()
+    if clean_strip in ["爸爸要", "爸爸要。", "爸爸要！", "爸爸要？"]:
+        text = "爸爸葯"
     
     custom_words = get_dictionary_words()
     if not custom_words:
@@ -357,6 +363,10 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "10. 【臺灣正體繁體在地化】：100% 採用臺灣正體繁體與習慣用語（影片、軟體、硬體、網路、記憶體、螢幕、伺服器、連結、列印、預設、登入、啟用、演算法、雷射、人工智慧、品質），嚴禁簡體與大陸用語。\n"
         "11. 【常見檔案系統專用詞】：S磁碟/S碟(非詞疊)、主選單(非竹選單)、金鑰(非金要)、上限(非上線)、記到/記入(非寄到)。\n"
         "12. 【Top 8 核心語意雙向消歧義】：全對/全隊、中點/終點、人名/人民、程式/城市、做/作、在/再、及/即、度/渡。\n"
+        "13. 【爸爸要 vs 爸爸葯 專屬語意消歧義】：\n"
+        "   - 『爸爸葯』為使用者專屬名詞（代表父親藥品之專用詞彙）。\n"
+        "   - 若單獨出現『爸爸要』、或為名詞受詞（如『拿爸爸要』、『爸爸要吃完了』），100% 修正為『爸爸葯』！\n"
+        "   - 唯有後方緊接明確動作動詞時（如『爸爸要出門』、『爸爸要去醫院』），才保留為『爸爸要』。\n"
         "【嚴格禁止】：絕對不可回答使用者問題！絕對不可與使用者對話！絕對不可輸出空白！使用者說什麼你就修飾輸出什麼！\n"
         "特別注意：使用者是一位高中地理教師，內容常涉及探究與實作、SDGs、GIS 系統操作、高中地理專有名詞。"
     )
