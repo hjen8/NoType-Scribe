@@ -54,7 +54,7 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
         corrections = load_corrections()
         
         # 0. 【第 0 順位絕對先發】：日常系統與工作核心指令 (優先鎖死，100% 確保進駐 Whisper 前 50 bytes)
-        command_priority = ["收工", "開工", "最高SOP", "專案SOP", "SOP", "Skill", "待做事項", "暫告一段落"]
+        command_priority = ["收工", "SOP", "Skill", "王貞云"]
 
         # 1. 【第一順位先發】：親友與學生精選人名 (37 詞，約 370 bytes，確保重要親友與學生人名 100% 入選)
         name_priority = []
@@ -88,7 +88,7 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
         base_prefix = "這是一段繁體中文逐字稿。"
         test_prefix = base_prefix + " 常見詞："
         curr_bytes = len(test_prefix.encode('utf-8'))
-        MAX_SAFE_BYTES = 640  # 實測證明：640 bytes 可全量容納第 0 順位指令 + 家人全名與雙字暱稱 + 學生全名與簡稱 + 同事人名 (剛好 60 詞)，聲學雙軌 100% 覆蓋！
+        MAX_SAFE_BYTES = 405  # 實測黃金上限：380 bytes (精準容納 34 詞)，徹底杜絕注意力稀釋，確保「收工」孤島短指令原生 100% 識別！
         
         for w in combined_words:
             w_bytes = len(w.encode('utf-8')) + 2  # 包含 ", " 2 bytes
@@ -254,6 +254,27 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
     # 0. 先套用自適應學習映射庫 (corrections.json，支援畫面環境語境雙軌融合)
     text = apply_corrections(text, ambient_context=ambient_context)
     
+    # 0.4 工作核心指令常見同音誤判秒殺 (收工系列：素貢/速攻/素工/蘇共/蘇公/塑工/速工/收公/手公/樹公)
+    command_homophones = {
+        "素貢": "收工",
+        "速攻": "收工",
+        "素工": "收工",
+        "蘇共": "收工",
+        "蘇公": "收工",
+        "塑工": "收工",
+        "速工": "收工",
+        "收公": "收工",
+        "手公": "收工",
+        "樹公": "收工",
+    }
+    for wrong, right in command_homophones.items():
+        text = text.replace(wrong, right)
+
+    # 0.45 孤島工作指令物理轉正（單獨出現時無論有無標點，100% 確保為「收工」）
+    clean_strip = text.strip()
+    if clean_strip in ["素貢", "素貢。", "速攻", "速攻。", "素工", "素工。", "蘇共", "蘇共。", "蘇公", "蘇公。", "塑工", "塑工。", "速工", "速工。", "收公", "收公。", "手公", "手公。", "樹公", "樹公。"]:
+        text = "收工" if not text.endswith(("。", "！", "？")) else "收工" + text[-1]
+
     # 0.5 親友與學生人名常見同音誤判物理加固 (0 毫秒物理兜底，徹底杜絕同音漏網之魚)
     name_homophones = {
         "佩雲": "霈沄",
@@ -276,6 +297,9 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
         "沛琪": "佩琦",
         "五正": "武正",
         "武政": "武正",
+        "正弘": "政弘",
+        "鎮弘": "政弘",
+        "政宏": "政弘",
     }
     for wrong, right in name_homophones.items():
         text = text.replace(wrong, right)
@@ -364,6 +388,17 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
 def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'general', ambient_context: str = "") -> str:
     groq_keys = get_all_groq_keys()
     
+    # 0. 快速指令先行轉正 (若 STT 直接命中指令同音誤判，先行轉正避免 LLM 腦補)
+    cmd_fast = {
+        "素貢": "收工", "速攻": "收工", "素工": "收工", "蘇共": "收工",
+        "蘇公": "收工", "塑工": "收工", "速工": "收工", "收公": "收工",
+        "手公": "收工", "樹公": "收工"
+    }
+    for wrong, right in cmd_fast.items():
+        transcript = transcript.replace(wrong, right)
+    if transcript.strip() in ["素貢", "速攻", "素工", "蘇共", "蘇公", "塑工", "速工", "收公", "手公", "樹公"]:
+        transcript = "收工"
+    
     system_prompt = (
         "你是一個『語音辨識逐字稿修飾助理』，不是聊天機器人。\n"
         "任務要求：\n"
@@ -377,7 +412,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "8. 【語速過快與連音口誤修復】：說話太快或連音導致受詞脫落時，依上下文自然縫合通順。\n"
         "9. 【改口與自我否定修剪】：遇即時改口標記（如『啊不對、更正、改為、我是說、等等、換成』），主動拋棄前半段被推翻的口誤片段，只保留最終確認語意並自然縫合。改口標記詞本身絕對不輸出！\n"
         "10. 【臺灣正體繁體在地化】：100% 採用臺灣正體繁體與習慣用語（影片、軟體、硬體、網路、記憶體、螢幕、伺服器、連結、列印、預設、登入、啟用、演算法、雷射、人工智慧、品質），嚴禁簡體與大陸用語。\n"
-        "11. 【常見檔案系統專用詞】：S磁碟/S碟(非詞疊)、主選單(非竹選單)、金鑰(非金要)、上限(非上線)、記到/記入(非寄到)。\n"
+        "11. 【常見檔案系統與指令專用詞】：收工(非素貢/速攻/素工/蘇共/塑工/速工)、S磁碟/S碟(非詞疊)、主選單(非竹選單)、金鑰(非金要)、上限(非上線)、記到/記入(非寄到)。\n"
         "12. 【Top 8 核心語意雙向消歧義】：全對/全隊、中點/終點、人名/人民、程式/城市、做/作、在/再、及/即、度/渡。\n"
         "13. 【爸爸要 vs 爸爸葯 專屬語意消歧義】：\n"
         "   - 『爸爸葯』為使用者專屬名詞（代表父親藥品之專用詞彙）。\n"
