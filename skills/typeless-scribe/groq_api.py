@@ -29,8 +29,8 @@ def get_client(api_key=None):
     key = api_key or get_current_groq_key()
     if not key:
         return None
-    # 設置 timeout=6.0 與 max_retries=0，徹底杜絕 SDK 面對 429 時在後台 sleep 死等 20~70 秒之惡性卡頓，遭遇 429 立刻拋出由 NoType 毫秒級自動切換備援
-    return Groq(api_key=key, timeout=6.0, max_retries=0)
+    # 設置 timeout=3.2 與 max_retries=0，壓縮瀑布流重試等待，遭遇 429 或超時立刻拋出由 NoType 毫秒級自動切換備援
+    return Groq(api_key=key, timeout=3.2, max_retries=0)
 
 def get_dictionary_words() -> str:
     dict_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dictionary.txt')

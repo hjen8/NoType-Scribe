@@ -22,6 +22,8 @@ class UIManager:
         self.root.withdraw() # 隱藏主視窗
         self.msg_queue = queue.Queue()
         self.floating_win = None
+        self.floating_label = None
+        self.floating_sublabel = None
         self.settings_win = None
         self.history_win = None
         self.dictionary_win = None
@@ -107,7 +109,7 @@ class UIManager:
             self.floating_win.attributes("-topmost", True)
             self.floating_win.configure(bg="#2c3e50")
             
-            tk.Label(
+            self.floating_label = tk.Label(
                 self.floating_win, 
                 text="🎤 錄音中...", 
                 font=("Microsoft JhengHei", 14, "bold"), 
@@ -115,7 +117,8 @@ class UIManager:
                 bg="#2c3e50", 
                 padx=10, 
                 pady=5
-            ).pack()
+            )
+            self.floating_label.pack()
             
             sw = self.floating_win.winfo_screenwidth()
             sh = self.floating_win.winfo_screenheight()
@@ -134,21 +137,23 @@ class UIManager:
             row1 = tk.Frame(inner, bg="#181818")
             row1.pack(anchor="center")
             
-            tk.Label(
+            self.floating_label = tk.Label(
                 row1, 
                 text="🔴 正在錄音中...", 
                 font=("Microsoft JhengHei", 15, "bold"), 
                 fg="#ffffff", 
                 bg="#181818"
-            ).pack(side="left")
+            )
+            self.floating_label.pack(side="left")
             
-            tk.Label(
+            self.floating_sublabel = tk.Label(
                 inner,
                 text="再按一下 ~ 鍵 停止並貼上",
                 font=("Microsoft JhengHei", 10),
                 fg="#a4b0be",
                 bg="#181818"
-            ).pack(anchor="center", pady=(5, 0))
+            )
+            self.floating_sublabel.pack(anchor="center", pady=(5, 0))
             
             self.floating_win.update_idletasks()
             w = max(260, self.floating_win.winfo_reqwidth())
@@ -162,6 +167,26 @@ class UIManager:
             
             self.floating_win.geometry(f"{w}x{h}+{x}+{y}")
 
+    def show_processing(self):
+        """將懸浮視窗轉為 AI 辨識修飾中狀態，杜絕黑盒等待焦慮"""
+        if not (self.floating_win and self.floating_win.winfo_exists()):
+            return
+        is_desktop = os.path.exists("S:\\")
+        try:
+            if is_desktop:
+                self.floating_win.configure(bg="#2980b9")
+                if hasattr(self, 'floating_label') and self.floating_label and self.floating_label.winfo_exists():
+                    self.floating_label.configure(text="⏳ AI 處理中...", bg="#2980b9")
+            else:
+                self.floating_win.configure(bg="#1e90ff") # 醒目科技電藍外框
+                if hasattr(self, 'floating_label') and self.floating_label and self.floating_label.winfo_exists():
+                    self.floating_label.configure(text="⏳ AI 辨識修飾中...")
+                if hasattr(self, 'floating_sublabel') and self.floating_sublabel and self.floating_sublabel.winfo_exists():
+                    self.floating_sublabel.configure(text="正在整理語意，即將自動貼上")
+            self.floating_win.update_idletasks()
+        except Exception as e:
+            print(f"[UI] show_processing error: {e}")
+
     def hide_floating(self):
         if self.floating_win:
             try:
@@ -169,6 +194,8 @@ class UIManager:
             except Exception:
                 pass
             self.floating_win = None
+            self.floating_label = None
+            self.floating_sublabel = None
 
     def open_settings(self):
         if self.settings_win and self.settings_win.winfo_exists():
@@ -2215,6 +2242,8 @@ class UIManager:
                     self.open_dictionary(focus_category=cat)
                 elif item == 'show_floating':
                     self.show_floating()
+                elif item == 'show_processing':
+                    self.show_processing()
                 elif item == 'hide_floating':
                     self.hide_floating()
                 elif item == 'open_settings':

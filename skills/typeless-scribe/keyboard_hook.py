@@ -282,14 +282,19 @@ class KeyboardManager:
             duration_sec=duration_sec,
             audio_path=file_path
         )
+        t_start_all = time.time()
+        t_stt = 0.0
+        t_llm = 0.0
         try:
             safe_print("\n[STT] Starting transcription...")
             start = time.time()
             transcript, is_offline = transcribe_audio(file_path, return_meta=True)
-            safe_print(f"[STT] Done ({time.time()-start:.1f}s, offline={is_offline}): {transcript}")
+            t_stt = time.time() - start
+            safe_print(f"[STT] Done ({t_stt:.1f}s, offline={is_offline}): {transcript}")
 
             if not transcript or not transcript.strip():
                 safe_print("[STT] No valid speech detected.")
+                ui.msg_queue.put('hide_floating')
                 record.status = "failed"
                 record.error_msg = "未偵測到清晰語音"
                 record.refined_text = "(未偵測到語音)"
@@ -324,7 +329,8 @@ class KeyboardManager:
                     from groq_api import apply_dictionary_post_process
                     refined_text = apply_dictionary_post_process(apply_corrections(transcript.strip(), ambient_context=ambient_context), ambient_context=ambient_context)
                     
-                safe_print(f"[LLM] Done ({time.time()-start:.1f}s): {refined_text}")
+                t_llm = time.time() - start
+                safe_print(f"[LLM] Done ({t_llm:.1f}s): {refined_text}")
             
             # 【物理層零空值熔斷保險 (Zero-Empty Fallback)】
             # 若 LLM 回傳空字串或僅含空白，強制自動降級使用原始逐字稿，徹底杜絕空字串存檔與貼空
@@ -381,10 +387,17 @@ class KeyboardManager:
             pyautogui.hotkey('ctrl', 'v')
             print(f"[OK] Text pasted to cursor! (Mode: {app_mode})")
             
-            # 4. 關鍵防護：貼上就緒後，安全通知 UI 刷新歷史面板 (杜絕 Tkinter 凍結導致剪貼簿競態)
+            # 4. 關鍵防護：貼上就緒後，隱藏懸浮窗並安全通知 UI 刷新歷史面板
+            ui.msg_queue.put('hide_floating')
             ui.msg_queue.put('refresh_history')
             
+            # 耗時透明化診斷：若整體超過 2.5 秒，主動彈出白話耗時分析
+            total_time = time.time() - t_start_all
+            if total_time > 2.5:
+                ui.toast(f"⏱️ 總耗時 {total_time:.1f}s (轉錄: {t_stt:.1f}s | 修飾: {t_llm:.1f}s)", is_error=False, duration=3500)
+            
         except Exception as e:
+            ui.msg_queue.put('hide_floating')
             err_msg = str(e)
             print(f"[ERROR] {err_msg}")
             record.status = "failed"
@@ -476,8 +489,8 @@ class KeyboardManager:
         self.alt_tilde_pressed = False
         self.ctrl_tilde_pressed = False
         
-        # 1. 立即關閉錄音懸浮視窗！
-        ui.msg_queue.put('hide_floating')
+        # 1. 立即將懸浮視窗轉為 AI 辨識修飾中狀態（杜絕黑盒等待焦慮，貼上後才隱藏）
+        ui.msg_queue.put('show_processing')
         
         # 2. 錄音正常停止，立即取消超時定時器
         if self.timeout_timer:
@@ -508,6 +521,7 @@ class KeyboardManager:
                     file_path, duration_sec, self.app_context, self.target_hwnd, self.ambient_context
                 )
             else:
+                ui.msg_queue.put('hide_floating')
                 if reason == "too_short":
                     ui.toast("⏱ 錄音時間過短 (未滿 0.8 秒)，請說完再按停止", is_error=False, duration=2500)
                 elif reason.startswith("silence"):
