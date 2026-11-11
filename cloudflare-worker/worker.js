@@ -177,7 +177,7 @@ export default {
         const dictSample = (generalWords || []).slice(-100).join("、");
         const systemPrompt = `你是一個專業的語音輸入文本潤飾助理。你的任務是將語音轉錄的原始文字整理為流暢、自然的臺灣標準正體中文。
 嚴格遵守以下準則：
-1. 【100% 臺灣繁體中文】：嚴禁出現任何簡體字或中國大陸用語。${namePrompt}
+1. 【100% 臺灣繁體中文與同音自癒】：嚴禁出現任何簡體字或大陸用語。★【同音錯別字積極自癒】：語音輸入常因聲學相近產生無意義錯字（如：對話問亂➔紊亂、大蕩雞➔當機、不要從何能開始➔核能、台灣語量➔雨量、出題筆重➔比重、幾何向亮➔向量）。必須根據全句上下文大膽修正為正確繁體，絕對不要原樣照抄荒謬錯字！${namePrompt}
 2. 【專屬領域詞彙規範】：
 ${dictSample || "（無自訂術語）"}
 3. 【自適應標點符號與斷句】：依據中文語意自然加入標點符號（，、。！？），短句結尾不加句號。
@@ -196,7 +196,7 @@ ${dictSample || "（無自訂術語）"}
                 { role: "system", content: systemPrompt },
                 { role: "user", content: rawText }
               ],
-              temperature: 0.1,
+              temperature: 0.3,
               max_tokens: 500
             };
             if (model.includes("gpt-oss")) {
@@ -227,12 +227,21 @@ ${dictSample || "（無自訂術語）"}
           }
         }
 
-        // --- Step 4: 自癒學習庫二度精準替換 ---
+        // --- Step 4: 自癒學習庫二度精準替換 (支援情境感知條件規則) ---
         if (corrections && Object.keys(corrections).length > 0) {
-          for (const [wrong, right] of Object.entries(corrections)) {
-            const target = typeof right === "string" ? right : (right && right.correct ? right.correct : null);
-            if (wrong && target && polishedText.includes(wrong)) {
-              polishedText = polishedText.replaceAll(wrong, target);
+          for (const [wrong, rule] of Object.entries(corrections)) {
+            if (!wrong || !polishedText.includes(wrong)) continue;
+            if (typeof rule === "string") {
+              polishedText = polishedText.replaceAll(wrong, rule);
+            } else if (rule && typeof rule === "object" && rule.correct) {
+              const target = rule.correct;
+              const posCtx = rule.contexts || [];
+              const negCtx = rule.negative_contexts || [];
+              const hitPos = posCtx.length === 0 || posCtx.some(ctx => polishedText.includes(ctx));
+              const hitNeg = negCtx.length > 0 && negCtx.some(nCtx => polishedText.includes(nCtx));
+              if (hitPos && !hitNeg) {
+                polishedText = polishedText.replaceAll(wrong, target);
+              }
             }
           }
         }
