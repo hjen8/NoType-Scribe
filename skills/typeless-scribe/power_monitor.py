@@ -128,15 +128,22 @@ class PowerMonitor:
         self._lock = threading.Lock()
         self._ready_event = threading.Event()
         self._running = False
+        self._last_resume_time = 0.0
 
     def _trigger_resume_debounced(self, reason: str):
-        """防抖延遲觸發：等待 Windows 核心驅動端點就緒後執行回呼"""
+        """防抖延遲觸發：等待 Windows 核心驅動端點就緒後執行回呼，並加上 5 秒安全冷卻期避免正回授風暴"""
         with self._lock:
+            now = time.time()
+            if self._last_resume_time > 0 and (now - self._last_resume_time) < 5.0:
+                safe_print(f"[PowerMonitor] Cooldown active ({(now - self._last_resume_time):.1f}s < 5.0s). Suppressing redundant trigger for: {reason}")
+                return
+
             if self._debounce_timer is not None:
                 self._debounce_timer.cancel()
                 self._debounce_timer = None
             
             def _worker():
+                self._last_resume_time = time.time()
                 safe_print(f"[PowerMonitor] Debounce elapsed ({self.debounce_delay}s). Executing resume callback for reason: {reason}")
                 if self.on_resume:
                     try:
@@ -162,14 +169,13 @@ class PowerMonitor:
                     return 1
 
             elif msg == WM_DEVICECHANGE:
-                if wparam in (DBT_DEVNODES_CHANGED, DBT_DEVICEARRIVAL, DBT_DEVICEREMOVECOMPLETE):
-                    event_desc = (
-                        "DevNodesChanged" if wparam == DBT_DEVNODES_CHANGED
-                        else "DeviceArrival" if wparam == DBT_DEVICEARRIVAL
-                        else "DeviceRemove"
-                    )
-                    # 僅在除錯時記錄，裝置節點可能頻繁變動，透過 debounce 匯流
-                    self._trigger_resume_debounced(f"Audio/Device Change ({event_desc})")
+                # 徹底剔除 DBT_DEVNODES_CHANGED (0x0007)！
+                # 筆電在電源切換或 PortAudio 重置掃描端點時會引發 DevNodesChanged 廣播，導致每 0.8s 重置音訊的正回授死循環！
+                # 僅在明確的音訊實體硬體插拔 (DBT_DEVICEARRIVAL / DBT_DEVICEREMOVECOMPLETE) 時才受控觸發
+                if wparam in (DBT_DEVICEARRIVAL, DBT_DEVICEREMOVECOMPLETE):
+                    event_desc = "DeviceArrival" if wparam == DBT_DEVICEARRIVAL else "DeviceRemove"
+                    safe_print(f"[PowerMonitor] Hardware device plugged/unplugged ({event_desc})")
+                    self._trigger_resume_debounced(f"Audio Hardware Change ({event_desc})")
                     return 1
 
             elif msg == WM_DESTROY:

@@ -1,9 +1,9 @@
 # 🌲 NoType 歷史版本樹 (Project Version Tree)
 
 > **核心定位**：本文件與專案說明書 (`README.md` / `ANTIGRAVITY.md`) 具同等級核心地位。  
-> 📌 **當前身處分支**：`main` (HEAD -> `a018c1d`)  
+> 📌 **當前身處分支**：`main` (HEAD -> `f00a9bd`)  
 > 🚦 **工作區狀態**：✅ 工作目錄整潔 (Clean)  
-> 🕒 **最後更新時間**：`2026-10-28 22:32:24`
+> 🕒 **最後更新時間**：`2026-11-11 11:11:23`
 
 ---
 
@@ -16,20 +16,20 @@ flowchart TD
     classDef default fill:#f8f9fa,stroke:#495057,stroke-width:1.8px,color:#212529,font-size:13px;
     classDef current fill:#ffebee,stroke:#c00000,stroke-width:3px,color:#900,font-weight:bold,font-size:13px;
     classDef mergeNode fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1,font-size:13px;
-    n_84b947b(["1. 【文件】最終收工同步 VERSION_T.."]):::default
-    n_8774d72(["2. 【修復】實裝錄音狀態感知防踩踏安全閥與異.."]):::default
-    n_3b1109f(["3. 【文件】最終收工同步 VERSION_T.."]):::default
-    n_3fd94e8(["4. 【修復】徹底移除貼上管線 Esc 鍵干擾.."]):::default
-    n_796160e(["5. 【文件】最終收工同步 VERSION_T.."]):::default
-    n_01556eb(["6. 【修復】工作核心指令第0順位常駐鎖死、P.."]):::default
-    n_de0f9ca(["7. 【文件】同步 VERSION_TREE..."]):::default
-    n_0998c9e(["8. 【優化】實裝三道物理安全鎖：進程提權 H.."]):::default
-    n_c88210e(["9. 【修復】全量補回家人雙字暱稱、實裝前後鼻.."]):::default
-    n_534b345(["10. 【文件】同步 VERSION_TREE..."]):::default
-    n_c39c580(["11. 【修復】收工孤島指令0ms秒殺、Prom.."]):::default
-    n_a018c1d(["12. 【文件】同步 VERSION_TREE..."]):::current
-    n_84b947b --> n_8774d72
-    n_8774d72 --> n_3b1109f
+    classDef detour fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#b78103,font-size:13px;
+    classDef transplant fill:#f3e5f5,stroke:#4a148c,stroke-width:2.5px,color:#4a148c,font-weight:bold,font-size:13px;
+    n_3b1109f(["1. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_3fd94e8(["2. 【修復】徹底移除貼上管線 Esc 鍵干擾.."]):::default
+    n_796160e(["3. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_01556eb(["4. 【修復】工作核心指令第0順位常駐鎖死、P.."]):::default
+    n_de0f9ca(["5. 【文件】同步 VERSION_TREE..."]):::default
+    n_0998c9e(["6. 【優化】實裝三道物理安全鎖：進程提權 H.."]):::default
+    n_c88210e(["7. 【修復】全量補回家人雙字暱稱、實裝前後鼻.."]):::default
+    n_534b345(["8. 【文件】同步 VERSION_TREE..."]):::default
+    n_c39c580(["9. 【修復】收工孤島指令0ms秒殺、Prom.."]):::default
+    n_a018c1d(["10. 【文件】同步 VERSION_TREE..."]):::default
+    n_cc1d9fb(["11. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_f00a9bd(["12. 【修復】拔除DevNodesChange.."]):::current
     n_3b1109f --> n_3fd94e8
     n_3fd94e8 --> n_796160e
     n_796160e --> n_01556eb
@@ -39,6 +39,8 @@ flowchart TD
     n_c88210e --> n_534b345
     n_534b345 --> n_c39c580
     n_c39c580 --> n_a018c1d
+    n_a018c1d --> n_cc1d9fb
+    n_cc1d9fb --> n_f00a9bd
 ```
 
 ---
@@ -48,18 +50,20 @@ flowchart TD
 
 | 編號 (No.) | 存檔ID (Hash) | 提交時間 | 分支/標籤 | 說明 (Commit Message) | 時光機指令 (前往此版本) |
 | :---: | :---: | :---: | :---: | :--- | :--- |
-| **12** | `a018c1d` | 2026-10-28 22:26 |  `HEAD -> main, origin/main, origin/HEAD` | 【文件】同步 VERSION_TREE.md 任務 62 完工收工 | `git checkout a018c1d` |
-| **11** | `c39c580` | 2026-10-28 22:19 |  | 【修復】收工孤島指令0ms秒殺、Prompt 398 bytes精準收縮防稀釋與文培亦、陳金枝加回 任務 62 | `git checkout c39c580` |
-| **10** | `534b345` | 2026-10-24 01:28 |  | 【文件】同步 VERSION_TREE.md 任務 61 完工收工 | `git checkout 534b345` |
-| **9** | `c88210e` | 2026-10-24 01:28 |  | 【修復】全量補回家人雙字暱稱、實裝前後鼻音 信之➔杏枝 秒殺與Prompt 640bytes配額 任務 61 | `git checkout c88210e` |
-| **8** | `0998c9e` | 2026-10-23 23:21 |  | 【優化】實裝三道物理安全鎖：進程提權 HIGH、鍵盤線程提權 HIGHEST、系統匣新增一鍵重新掛載鉤子 | `git checkout 0998c9e` |
-| **7** | `de0f9ca` | 2026-10-23 22:29 |  | 【文件】同步 VERSION_TREE.md 任務 60 完工收工 | `git checkout de0f9ca` |
-| **6** | `01556eb` | 2026-10-23 22:29 |  | 【修復】工作核心指令第0順位常駐鎖死、Prompt聚焦460bytes與爸爸葯語意消歧義 任務 60 | `git checkout 01556eb` |
-| **5** | `796160e` | 2026-10-22 12:55 |  | 【文件】最終收工同步 VERSION_TREE.md HEAD -> 3fd94e8 | `git checkout 796160e` |
-| **4** | `3fd94e8` | 2026-10-22 12:55 |  | 【修復】徹底移除貼上管線 Esc 鍵干擾 根治 PowerPoint 游標插入文字誤觸全選形狀整段遭覆蓋替換 | `git checkout 3fd94e8` |
-| **3** | `3b1109f` | 2026-10-22 09:13 |  | 【文件】最終收工同步 VERSION_TREE.md HEAD -> 8774d72 | `git checkout 3b1109f` |
-| **2** | `8774d72` | 2026-10-22 09:12 |  | 【修復】實裝錄音狀態感知防踩踏安全閥與異質應用焦點隔離 根治 DevNodesChanged 中斷與 VSCode/Antigravity 對話框失焦 | `git checkout 8774d72` |
-| **1** | `84b947b` | 2026-10-21 23:05 |  | 【文件】最終收工同步 VERSION_TREE.md | `git checkout 84b947b` |
+| **12** | `f00a9bd` | 2026-11-11 11:11 |  `HEAD -> main` | 【修復】拔除DevNodesChanged正回授死循環、錄音啟動全面非同步線程化根治筆電卡頓與鍵盤癱瘓 任務 63 | `git checkout f00a9bd` |
+| **11** | `cc1d9fb` | 2026-10-28 22:32 |  `origin/main, origin/HEAD` | 【文件】最終收工同步 VERSION_TREE.md HEAD -> a018c1d | `git checkout cc1d9fb` |
+| **10** | `a018c1d` | 2026-10-28 22:26 |  | 【文件】同步 VERSION_TREE.md 任務 62 完工收工 | `git checkout a018c1d` |
+| **9** | `c39c580` | 2026-10-28 22:19 |  | 【修復】收工孤島指令0ms秒殺、Prompt 398 bytes精準收縮防稀釋與文培亦、陳金枝加回 任務 62 | `git checkout c39c580` |
+| **8** | `534b345` | 2026-10-24 01:28 |  | 【文件】同步 VERSION_TREE.md 任務 61 完工收工 | `git checkout 534b345` |
+| **7** | `c88210e` | 2026-10-24 01:28 |  | 【修復】全量補回家人雙字暱稱、實裝前後鼻音 信之➔杏枝 秒殺與Prompt 640bytes配額 任務 61 | `git checkout c88210e` |
+| **6** | `0998c9e` | 2026-10-23 23:21 |  | 【優化】實裝三道物理安全鎖：進程提權 HIGH、鍵盤線程提權 HIGHEST、系統匣新增一鍵重新掛載鉤子 | `git checkout 0998c9e` |
+| **5** | `de0f9ca` | 2026-10-23 22:29 |  | 【文件】同步 VERSION_TREE.md 任務 60 完工收工 | `git checkout de0f9ca` |
+| **4** | `01556eb` | 2026-10-23 22:29 |  | 【修復】工作核心指令第0順位常駐鎖死、Prompt聚焦460bytes與爸爸葯語意消歧義 任務 60 | `git checkout 01556eb` |
+| **3** | `796160e` | 2026-10-22 12:55 |  | 【文件】最終收工同步 VERSION_TREE.md HEAD -> 3fd94e8 | `git checkout 796160e` |
+| **2** | `3fd94e8` | 2026-10-22 12:55 |  | 【修復】徹底移除貼上管線 Esc 鍵干擾 根治 PowerPoint 游標插入文字誤觸全選形狀整段遭覆蓋替換 | `git checkout 3fd94e8` |
+| **1** | `3b1109f` | 2026-10-22 09:13 |  | 【文件】最終收工同步 VERSION_TREE.md HEAD -> 8774d72 | `git checkout 3b1109f` |
+| **-** | `8774d72` | 2026-10-22 09:12 |  | 【修復】實裝錄音狀態感知防踩踏安全閥與異質應用焦點隔離 根治 DevNodesChanged 中斷與 VSCode/Antigravity 對話框失焦 | `git checkout 8774d72` |
+| **-** | `84b947b` | 2026-10-21 23:05 |  | 【文件】最終收工同步 VERSION_TREE.md | `git checkout 84b947b` |
 | **-** | `e84eb66` | 2026-10-21 22:31 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout e84eb66` |
 | **-** | `aef1404` | 2026-10-21 22:30 |  | 【修復】徹底根除 Alt 鍵盤狀態卡死 根治 ~ 誤判反白修飾與 OneNote 自動貼上失效，並永久保全剪貼簿 | `git checkout aef1404` |
 | **-** | `95a7624` | 2026-10-21 21:53 |  | 【文件】同步 VERSION_TREE.md 版本樹 | `git checkout 95a7624` |
@@ -71,8 +75,6 @@ flowchart TD
 | **-** | `79089d2` | 2026-10-19 01:47 |  | 【文件】同步收工版本樹 VERSION_TREE.md b75d44f | `git checkout 79089d2` |
 | **-** | `b75d44f` | 2026-10-19 01:23 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 e1c1c9f | `git checkout b75d44f` |
 | **-** | `e1c1c9f` | 2026-10-19 01:23 |  | 【修復】根治手機端學生姓名辨識偏誤：Cloudflare Worker 更換在線模型輪詢容錯、人名獨立提權最高 Prompt、自癒映射注入文培亦與物件替換防護 | `git checkout e1c1c9f` |
-| **-** | `9480dc7` | 2026-10-15 10:18 |  | 【文件】同步 VERSION_TREE.md 歷史版本樹 9ebe870 | `git checkout 9480dc7` |
-| **-** | `9ebe870` | 2026-10-15 10:18 |  | 【修復】根除 PyAutoGUI fail-safe 角落貼上阻截，Prompt Token 瘦身 65% 並加固 Groq 429 自癒冷卻 | `git checkout 9ebe870` |
 
 ---
 
@@ -83,7 +85,9 @@ flowchart TD
 
 ### 4. 終端完整拓撲圖 (Terminal ASCII Graph)
 ```text
-* a018c1d (HEAD -> main, origin/main, origin/HEAD) 【文件】同步 VERSION_TREE.md (Task 62 完工收工)
+* f00a9bd (HEAD -> main) 【修復】拔除DevNodesChanged正回授死循環、錄音啟動全面非同步線程化根治筆電卡頓與鍵盤癱瘓 (Task 63)
+* cc1d9fb (origin/main, origin/HEAD) 【文件】最終收工同步 VERSION_TREE.md HEAD -> a018c1d
+* a018c1d 【文件】同步 VERSION_TREE.md (Task 62 完工收工)
 * c39c580 【修復】收工孤島指令0ms秒殺、Prompt 398 bytes精準收縮防稀釋與文培亦、陳金枝加回 (Task 62)
 * 534b345 【文件】同步 VERSION_TREE.md (Task 61 完工收工)
 * c88210e 【修復】全量補回家人雙字暱稱、實裝前後鼻音(信之➔杏枝)秒殺與Prompt 640bytes配額 (Task 61)
@@ -106,8 +110,6 @@ flowchart TD
 * 79089d2 docs: 同步收工版本樹 VERSION_TREE.md (b75d44f)
 * b75d44f 【文件】同步 VERSION_TREE.md 歷史版本樹 (e1c1c9f)
 * e1c1c9f 【修復】根治手機端學生姓名辨識偏誤：Cloudflare Worker 更換在線模型輪詢容錯、人名獨立提權最高 Prompt、自癒映射注入文培亦與物件替換防護
-* 9480dc7 【文件】同步 VERSION_TREE.md 歷史版本樹 (9ebe870)
-* 9ebe870 【修復】根除 PyAutoGUI fail-safe 角落貼上阻截，Prompt Token 瘦身 65% 並加固 Groq 429 自癒冷卻
 ```
 
 ---

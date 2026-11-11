@@ -69,15 +69,18 @@ class KeyboardManager:
         self._watchdog_thread = None
 
     def _on_system_resume(self, reason: str):
-        safe_print(f"[Power] Audio stream reconnect triggered by {reason}...")
-        success = self.recorder.reset_audio_engine()
-        if success:
-            try:
-                # 若為裝置硬體變更且正在錄音中，reset 已被安全延後，不彈出非預期的系統喚醒提示
-                if not getattr(self.recorder, '_pending_reset', False):
-                    ui.toast("⚡ 系統喚醒：音訊串流已全自動重連！", is_error=False, duration=2500)
-            except Exception as e:
-                safe_print(f"[Power] UI toast error: {e}")
+        # 移交後台線程執行，絕對嚴禁阻塞主線程或系統消息隊列
+        def _worker():
+            safe_print(f"[Power] Audio stream reconnect triggered by {reason}...")
+            success = self.recorder.reset_audio_engine()
+            if success and "Wake-up" in reason:
+                try:
+                    # 若為裝置硬體變更且正在錄音中，reset 已被安全延後，不彈出非預期的系統喚醒提示
+                    if not getattr(self.recorder, '_pending_reset', False):
+                        ui.toast("⚡ 系統喚醒：音訊串流已全自動重連！", is_error=False, duration=2500)
+                except Exception as e:
+                    safe_print(f"[Power] UI toast error: {e}")
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _detect_app_context(self, hwnd) -> dict:
         import ctypes
@@ -408,20 +411,7 @@ class KeyboardManager:
         self.app_context = self._detect_app_context(self.target_hwnd)
         self.ambient_context = ""
         
-        # 啟動非同步嗅探線程探測當前前景焦點視窗語境 (0 延遲，不阻塞錄音啟動)
-        def _sniff(hwnd):
-            try:
-                from screen_context import get_foreground_window_text
-                text = get_foreground_window_text(hwnd)
-                if text:
-                    self.ambient_context = text
-                    safe_print(f"[Ambient] 畫面語境嗅探完成 ({len(text)} 字元)")
-            except Exception as e:
-                safe_print(f"[Ambient Sniff Error] {e}")
-                
-        threading.Thread(target=_sniff, args=(self.target_hwnd,), daemon=True).start()
-        
-        print(f"\n[REC] Recording started... (Active App: {self.app_context['name']} | Mode: {self.app_context['mode']})")
+        print(f"\n[REC] Recording requested... (Active App: {self.app_context['name']} | Mode: {self.app_context['mode']})")
         ui.msg_queue.put('show_floating')
         
         # 啟動 120 秒單次錄音超時防忘安全定時器 (1-52)
@@ -434,7 +424,32 @@ class KeyboardManager:
         self.timeout_timer.daemon = True
         self.timeout_timer.start()
         
-        self.recorder.start_recording()
+        # 核心解耦：將音效卡串流開啟 (sd.InputStream) 與畫面嗅探全面移入後台線程！
+        # 讓 Windows 底層低階鍵盤鉤子 (_win32_filter) 在 < 0.05ms 內極速向 Windows OS 返回！
+        # 徹底杜絕 Windows LowLevelHooksTimeout (200ms) 靜默拔鉤與整台筆電鍵盤卡死癱瘓致命問題！
+        def _start_worker():
+            try:
+                from screen_context import get_foreground_window_text
+                text = get_foreground_window_text(self.target_hwnd)
+                if text:
+                    self.ambient_context = text
+                    safe_print(f"[Ambient] 畫面語境嗅探完成 ({len(text)} 字元)")
+            except Exception as e:
+                safe_print(f"[Ambient Sniff Error] {e}")
+                
+            try:
+                self.recorder.start_recording()
+                safe_print(f"[REC] Audio stream active (App: {self.app_context['name']})")
+            except Exception as e:
+                safe_print(f"[REC Start Error] {e}")
+                self.is_recording = False
+                ui.msg_queue.put('hide_floating')
+                try:
+                    ui.toast(f"⚠️ 麥克風啟動異常: {e}", is_error=True, duration=3500)
+                except Exception:
+                    pass
+
+        threading.Thread(target=_start_worker, daemon=True).start()
 
     def _on_recording_timeout(self):
         """單次錄音達 120 秒上限時自動觸發安全截斷與處理 (1-52)"""
