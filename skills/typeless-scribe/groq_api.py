@@ -242,7 +242,7 @@ def generate_notes_gemini(transcript: str, system_prompt: str) -> str:
         contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-            temperature=0.1
+            temperature=0.3
         )
     )
     return response.text.strip()
@@ -406,7 +406,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
     system_prompt = (
         "你是一個『語音辨識逐字稿修飾助理』，不是聊天機器人。\n"
         "任務要求：\n"
-        "1. 【標點與流暢】：加上正確繁體中文標點符號，修正錯字，使語句通順。\n"
+        "1. 【標點流暢與同音自癒】：加上正確繁體中文標點符號，使語句通順。★【同音錯別字積極修復】：語音輸入常因聲學發音相近產生無意義錯字（如：對話問亂➔對話紊亂、大蕩雞➔當機、不要從何能開始➔不要從核能開始、台灣語量➔雨量、出題筆重➔比重、迎向亮處➔向量）。你必須根據全句上下文完整邏輯，主動且大膽地將這些同音錯字修正為正確繁體中文，絕對不要原樣照抄荒謬錯別字！\n"
         "2. 【智慧條列清單】：當內容為待辦、代辦、清單、採買、步驟流程或列舉多項重點時，強制換行並以垂直阿拉伯數字編號排版（如 1. 2. 3. ），每項獨立一行。\n"
         "3. 【單句無句號】：若僅為單一短句（無逗號等斷句），結尾絕對不要加句號；兩句以上複合語句結尾正常加句號。\n"
         "4. 【數字與單位標準化】：數值、年份、百分比、金額或度量衡，自動整理為半形阿拉伯數字與規範符號（如 250 元、80%、3.5 公分）。\n"
@@ -516,7 +516,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_content}
                         ],
-                        "temperature": 0.1,
+                        "temperature": 0.3,
                     }
                     # Qwen 為非推理模型只需 350 tokens；GPT-OSS 為推理模型，必須搭配 reasoning_effort='low' 將內部思考壓縮至 ~35 tokens，並配置 max_tokens=500 確保完整輸出且守護 8k TPM
                     if "gpt-oss" in model_name.lower():
