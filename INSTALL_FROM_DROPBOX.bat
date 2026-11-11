@@ -88,6 +88,11 @@ if exist "%DROPBOX_SRC%corrections.json" (
     copy /y "%DROPBOX_SRC%corrections.json" "%SKILL_DIR%\corrections.json" >nul
     echo [OK] Restored corrections.json (active learning pairs)
 )
+if exist "%DROPBOX_SRC%requirements.txt" (
+    copy /y "%DROPBOX_SRC%requirements.txt" "%SKILL_DIR%\requirements.txt" >nul
+    copy /y "%DROPBOX_SRC%requirements.txt" "%TARGET_DIR%\requirements.txt" >nul
+    echo [OK] Restored requirements.txt
+)
 
 REM Copy trusted batch scripts directly from Dropbox if available
 if exist "%DROPBOX_SRC%setup_new_pc.bat" copy /y "%DROPBOX_SRC%setup_new_pc.bat" "%TARGET_DIR%\setup_new_pc.bat" >nul

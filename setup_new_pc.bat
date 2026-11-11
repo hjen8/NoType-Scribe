@@ -45,9 +45,16 @@ if not exist "%PYTHON_EXE%" (
 
 REM 3. Install/update dependencies
 echo.
-echo [3/5] Installing dependencies from requirements.txt...
+echo [3/5] Installing dependencies...
 "%PYTHON_EXE%" -m pip install --upgrade pip >nul 2>&1
-"%PIP_EXE%" install -r "%~dp0skills\typeless-scribe\requirements.txt"
+if exist "%~dp0skills\typeless-scribe\requirements.txt" (
+    "%PIP_EXE%" install -r "%~dp0skills\typeless-scribe\requirements.txt"
+) else if exist "%~dp0requirements.txt" (
+    "%PIP_EXE%" install -r "%~dp0requirements.txt"
+) else (
+    echo [INFO] requirements.txt not found, installing core dependencies directly...
+    "%PIP_EXE%" install groq pynput pyautogui pyperclip sounddevice soundfile numpy pillow pystray
+)
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to install some dependencies.
     pause
