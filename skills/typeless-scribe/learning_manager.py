@@ -130,9 +130,9 @@ def apply_corrections(text: str, ambient_context: str = "") -> str:
                 
                 # 必須在同一子句中包含目標詞
                 if wrong in clause:
-                    # 檢查正向關鍵字：口述子句包含 或 當前螢幕焦點畫面包含 (雙軌融合)
+                    # 檢查正向關鍵字：口述子句包含 或 當前螢幕焦點畫面包含 (雙軌融合，ambient 限長度 >= 2 防單字/單數字誤觸)
                     hit_pos_clause = any(ctx in clause for ctx in pos_ctx) if pos_ctx else True
-                    hit_pos_ambient = any(ctx in ambient_context for ctx in pos_ctx) if (ambient_context and pos_ctx) else False
+                    hit_pos_ambient = any(len(ctx) >= 2 and ctx in ambient_context for ctx in pos_ctx) if (ambient_context and pos_ctx) else False
                     hit_pos = hit_pos_clause or hit_pos_ambient
                     
                     # 檢查負向排除關鍵字 (若口述子句命中任一負向詞則放棄替換，避免互殺)
