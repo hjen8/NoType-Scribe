@@ -72,7 +72,10 @@ def rotate_groq_key() -> str:
     return keys[_current_key_idx]
 
 def get_api_key() -> str:
-    return get_current_groq_key()
+    keys = get_all_groq_keys()
+    if keys:
+        return ", ".join(keys)
+    return ""
 
 def set_api_key(api_key):
     config = load_config()
