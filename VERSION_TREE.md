@@ -1,9 +1,9 @@
 # 🌲 NoType 歷史版本樹 (Project Version Tree)
 
 > **核心定位**：本文件與專案說明書 (`README.md` / `ANTIGRAVITY.md`) 具同等級核心地位。  
-> 📌 **當前身處分支**：`main` (HEAD -> `a3811e6`)  
+> 📌 **當前身處分支**：`main` (HEAD -> `2516eea`)  
 > 🚦 **工作區狀態**：✅ 工作目錄整潔 (Clean)  
-> 🕒 **最後更新時間**：`2026-11-23 19:27:43`
+> 🕒 **最後更新時間**：`2026-11-23 19:34:01`
 
 ---
 
@@ -18,19 +18,18 @@ flowchart TD
     classDef mergeNode fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1,font-size:13px;
     classDef detour fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#b78103,font-size:13px;
     classDef transplant fill:#f3e5f5,stroke:#4a148c,stroke-width:2.5px,color:#4a148c,font-weight:bold,font-size:13px;
-    n_d768dea(["1. 【功能】升級 LLM 溫度至 0.3、注.."]):::default
-    n_3c6dba7(["2. 【功能】同步升級 Cloudflare .."]):::default
-    n_bbc9770(["3. 【文件】最終收工同步 VERSION_T.."]):::default
-    n_7440da6(["4. 【功能】補全電信預付卡詞庫 如意卡/易付.."]):::default
-    n_4cc62de(["5. 【功能】完善多 Groq Key 逗號字.."]):::default
-    n_7373595(["6. 【功能】實作 SOP-046 多金鑰跨帳.."]):::default
-    n_c38586c(["7. 【文件】同步收工版本樹 VERSION_.."]):::default
-    n_bc83599(["8. 【文件】收工同步版本樹與全局超大腦地圖"]):::default
-    n_209af02(["9. 【修復】剔除 corrections.j.."]):::default
-    n_dc9d613(["10. 【文件】更新版本樹 更好➔根號 誤殺修正"]):::default
-    n_297e9ec(["11. 【文件】收工同步版本樹與全局超大腦地圖 .."]):::default
-    n_a3811e6(["12. 【文件】同步版本樹至最新狀態 24 支 .."]):::current
-    n_d768dea --> n_3c6dba7
+    n_3c6dba7(["1. 【功能】同步升級 Cloudflare .."]):::default
+    n_bbc9770(["2. 【文件】最終收工同步 VERSION_T.."]):::default
+    n_7440da6(["3. 【功能】補全電信預付卡詞庫 如意卡/易付.."]):::default
+    n_4cc62de(["4. 【功能】完善多 Groq Key 逗號字.."]):::default
+    n_7373595(["5. 【功能】實作 SOP-046 多金鑰跨帳.."]):::default
+    n_c38586c(["6. 【文件】同步收工版本樹 VERSION_.."]):::default
+    n_bc83599(["7. 【文件】收工同步版本樹與全局超大腦地圖"]):::default
+    n_209af02(["8. 【修復】剔除 corrections.j.."]):::default
+    n_dc9d613(["9. 【文件】更新版本樹 更好➔根號 誤殺修正"]):::default
+    n_297e9ec(["10. 【文件】收工同步版本樹與全局超大腦地圖 .."]):::default
+    n_a3811e6(["11. 【文件】同步版本樹至最新狀態 24 支 .."]):::default
+    n_2516eea(["12. 【文件】最終收工同步 VERSION_T.."]):::current
     n_3c6dba7 --> n_bbc9770
     n_bbc9770 --> n_7440da6
     n_7440da6 --> n_4cc62de
@@ -41,6 +40,7 @@ flowchart TD
     n_209af02 --> n_dc9d613
     n_dc9d613 --> n_297e9ec
     n_297e9ec --> n_a3811e6
+    n_a3811e6 --> n_2516eea
 ```
 
 ---
@@ -50,18 +50,19 @@ flowchart TD
 
 | 編號 (No.) | 存檔ID (Hash) | 提交時間 | 分支/標籤 | 說明 (Commit Message) | 時光機指令 (前往此版本) |
 | :---: | :---: | :---: | :---: | :--- | :--- |
-| **12** | `a3811e6` | 2026-11-23 19:27 |  `HEAD -> main, origin/main, origin/HEAD` | 【文件】同步版本樹至最新狀態 24 支 Gemini API 金鑰三軌負載平衡 | `git checkout a3811e6` |
-| **11** | `297e9ec` | 2026-11-23 19:20 |  | 【文件】收工同步版本樹與全局超大腦地圖 任務 68 圓滿收工 | `git checkout 297e9ec` |
-| **10** | `dc9d613` | 2026-11-23 19:12 |  | 【文件】更新版本樹 更好➔根號 誤殺修正 | `git checkout dc9d613` |
-| **9** | `209af02` | 2026-11-23 19:12 |  | 【修復】剔除 corrections.json 倒置之 更好➔根號 映射，並強化 ambient 語境長度防護 任務 68 | `git checkout 209af02` |
-| **8** | `bc83599` | 2026-11-23 16:45 |  | 【文件】收工同步版本樹與全局超大腦地圖 | `git checkout bc83599` |
-| **7** | `c38586c` | 2026-11-23 16:07 |  | 【文件】同步收工版本樹 VERSION_TREE SOP-046 多金鑰交替平衡上線 | `git checkout c38586c` |
-| **6** | `7373595` | 2026-11-23 16:07 |  | 【功能】實作 SOP-046 多金鑰跨帳號 1:1 交錯輪替負載平衡與旗艦模型優先保護機制 | `git checkout 7373595` |
-| **5** | `4cc62de` | 2026-11-23 15:48 |  | 【功能】完善多 Groq Key 逗號字串讀取與全域多金鑰負載均衡支援 | `git checkout 4cc62de` |
-| **4** | `7440da6` | 2026-11-23 14:26 |  | 【功能】補全電信預付卡詞庫 如意卡/易付卡 、注入玉復卡➔預付卡與盧亦卡➔如意卡同音自癒規則 | `git checkout 7440da6` |
-| **3** | `bbc9770` | 2026-11-11 22:19 |  | 【文件】最終收工同步 VERSION_TREE 任務 65 完工收工 | `git checkout bbc9770` |
-| **2** | `3c6dba7` | 2026-11-11 22:12 |  | 【功能】同步升級 Cloudflare Worker 溫度至 0.3、注入同音自癒 Prompt、支援情境感知替換規則 | `git checkout 3c6dba7` |
-| **1** | `d768dea` | 2026-11-11 22:04 |  | 【功能】升級 LLM 溫度至 0.3、注入同音自癒 Prompt、重構 corrections.json 為情境感知規則根除誤傷 | `git checkout d768dea` |
+| **12** | `2516eea` | 2026-11-23 19:33 |  `HEAD -> main, origin/main, origin/HEAD` | 【文件】最終收工同步 VERSION_TREE.md HEAD -> a3811e6 | `git checkout 2516eea` |
+| **11** | `a3811e6` | 2026-11-23 19:27 |  | 【文件】同步版本樹至最新狀態 24 支 Gemini API 金鑰三軌負載平衡 | `git checkout a3811e6` |
+| **10** | `297e9ec` | 2026-11-23 19:20 |  | 【文件】收工同步版本樹與全局超大腦地圖 任務 68 圓滿收工 | `git checkout 297e9ec` |
+| **9** | `dc9d613` | 2026-11-23 19:12 |  | 【文件】更新版本樹 更好➔根號 誤殺修正 | `git checkout dc9d613` |
+| **8** | `209af02` | 2026-11-23 19:12 |  | 【修復】剔除 corrections.json 倒置之 更好➔根號 映射，並強化 ambient 語境長度防護 任務 68 | `git checkout 209af02` |
+| **7** | `bc83599` | 2026-11-23 16:45 |  | 【文件】收工同步版本樹與全局超大腦地圖 | `git checkout bc83599` |
+| **6** | `c38586c` | 2026-11-23 16:07 |  | 【文件】同步收工版本樹 VERSION_TREE SOP-046 多金鑰交替平衡上線 | `git checkout c38586c` |
+| **5** | `7373595` | 2026-11-23 16:07 |  | 【功能】實作 SOP-046 多金鑰跨帳號 1:1 交錯輪替負載平衡與旗艦模型優先保護機制 | `git checkout 7373595` |
+| **4** | `4cc62de` | 2026-11-23 15:48 |  | 【功能】完善多 Groq Key 逗號字串讀取與全域多金鑰負載均衡支援 | `git checkout 4cc62de` |
+| **3** | `7440da6` | 2026-11-23 14:26 |  | 【功能】補全電信預付卡詞庫 如意卡/易付卡 、注入玉復卡➔預付卡與盧亦卡➔如意卡同音自癒規則 | `git checkout 7440da6` |
+| **2** | `bbc9770` | 2026-11-11 22:19 |  | 【文件】最終收工同步 VERSION_TREE 任務 65 完工收工 | `git checkout bbc9770` |
+| **1** | `3c6dba7` | 2026-11-11 22:12 |  | 【功能】同步升級 Cloudflare Worker 溫度至 0.3、注入同音自癒 Prompt、支援情境感知替換規則 | `git checkout 3c6dba7` |
+| **-** | `d768dea` | 2026-11-11 22:04 |  | 【功能】升級 LLM 溫度至 0.3、注入同音自癒 Prompt、重構 corrections.json 為情境感知規則根除誤傷 | `git checkout d768dea` |
 | **-** | `5fb84f1` | 2026-11-11 18:42 |  | 【文件】最終收工同步 VERSION_TREE 任務 63, 64 | `git checkout 5fb84f1` |
 | **-** | `b742715` | 2026-11-11 18:21 |  | 【修復】補強setup_new_pc之requirements.txt缺檔自動降級與相容防呆 | `git checkout b742715` |
 | **-** | `8efb4a5` | 2026-11-11 16:15 |  | 【同步】更新版本樹 任務 64 | `git checkout 8efb4a5` |
@@ -74,7 +75,6 @@ flowchart TD
 | **-** | `c88210e` | 2026-10-24 01:28 |  | 【修復】全量補回家人雙字暱稱、實裝前後鼻音 信之➔杏枝 秒殺與Prompt 640bytes配額 任務 61 | `git checkout c88210e` |
 | **-** | `0998c9e` | 2026-10-23 23:21 |  | 【優化】實裝三道物理安全鎖：進程提權 HIGH、鍵盤線程提權 HIGHEST、系統匣新增一鍵重新掛載鉤子 | `git checkout 0998c9e` |
 | **-** | `de0f9ca` | 2026-10-23 22:29 |  | 【文件】同步 VERSION_TREE.md 任務 60 完工收工 | `git checkout de0f9ca` |
-| **-** | `01556eb` | 2026-10-23 22:29 |  | 【修復】工作核心指令第0順位常駐鎖死、Prompt聚焦460bytes與爸爸葯語意消歧義 任務 60 | `git checkout 01556eb` |
 
 ---
 
@@ -85,7 +85,8 @@ flowchart TD
 
 ### 4. 終端完整拓撲圖 (Terminal ASCII Graph)
 ```text
-* a3811e6 (HEAD -> main, origin/main, origin/HEAD) 【文件】同步版本樹至最新狀態 (24 支 Gemini API 金鑰三軌負載平衡)
+* 2516eea (HEAD -> main, origin/main, origin/HEAD) 【文件】最終收工同步 VERSION_TREE.md (HEAD -> a3811e6)
+* a3811e6 【文件】同步版本樹至最新狀態 (24 支 Gemini API 金鑰三軌負載平衡)
 * 297e9ec docs: 收工同步版本樹與全局超大腦地圖 (Task 68 圓滿收工)
 * dc9d613 docs: 更新版本樹 (更好➔根號 誤殺修正)
 * 209af02 fix: 剔除 corrections.json 倒置之 更好➔根號 映射，並強化 ambient 語境長度防護 (Task 68)
@@ -109,7 +110,6 @@ flowchart TD
 * c88210e 【修復】全量補回家人雙字暱稱、實裝前後鼻音(信之➔杏枝)秒殺與Prompt 640bytes配額 (Task 61)
 * 0998c9e 【優化】實裝三道物理安全鎖：進程提權 HIGH、鍵盤線程提權 HIGHEST、系統匣新增一鍵重新掛載鉤子
 * de0f9ca 【文件】同步 VERSION_TREE.md (Task 60 完工收工)
-* 01556eb 【修復】工作核心指令第0順位常駐鎖死、Prompt聚焦460bytes與爸爸葯語意消歧義 (Task 60)
 ```
 
 ---
