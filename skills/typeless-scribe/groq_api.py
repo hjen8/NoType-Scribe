@@ -4,7 +4,12 @@ from groq import Groq
 from config_manager import (
     get_all_groq_keys, 
     get_current_groq_key, 
-    rotate_groq_key, 
+    rotate_groq_key,
+    get_next_groq_key,
+    get_all_gemini_keys,
+    get_current_gemini_key,
+    rotate_gemini_key,
+    get_next_gemini_key,
     get_gemini_api_key
 )
 
@@ -226,8 +231,8 @@ def get_active_chat_models(client, force_refresh=False) -> list:
     penalized = [m for m in _cached_models if _model_penalties.get(m, 0) > now]
     return valid + penalized
 
-def generate_notes_gemini(transcript: str, system_prompt: str) -> str:
-    gemini_key = get_gemini_api_key()
+def generate_notes_gemini(transcript: str, system_prompt: str, api_key: str = None) -> str:
+    gemini_key = api_key or get_current_gemini_key() or get_gemini_api_key()
     if not gemini_key:
         raise ValueError("NO_GEMINI_KEY")
         
@@ -533,6 +538,9 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                         raw_res = raw_res.strip()
                         raw_res = re.sub(r'<\/?text>', '', raw_res).strip()
                     if raw_res:
+                        # SOP-046: 成功完成一次請求後，自動推進輪替下一把 Groq Key，落實 1:1 交錯負載平衡
+                        if len(groq_keys) > 1:
+                            rotate_groq_key()
                         return apply_dictionary_post_process(raw_res, ambient_context=ambient_context)
                     else:
                         safe_print(f"⚠️ 模型 {model_name} 輸出空字串，嘗試下一個在線模型...")
@@ -560,15 +568,21 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                                 parsed = mins * 60 + secs
                                 if parsed > 0:
                                     penalty_duration = min(parsed + 5, 3600)
+
+                        # SOP-046 防降級鐵律：若還有其他獨立帳號的 Groq Key，優先輪替金鑰繼續嘗試旗艦模型，嚴禁在原 Key 降級次等模型！
+                        if key_attempt < num_keys - 1:
+                            safe_print(f"🔄 觸發速率限制，依 SOP-046 優先輪替至下一組 Groq Key 保持旗艦模型 (Qwen 27B)...")
+                            rotate_groq_key()
+                            if on_model_switch:
+                                on_model_switch("💡 NoType 提示：主力金鑰受限，依 SOP-046 輪替金鑰保持高智商模型")
+                            break
+
                         penalize_model(model_name, duration=penalty_duration)
-                        # 若當前 Key 還有其他備用模型，優先嘗試下一個在線模型 (例如 70B 受限換 8B)
                         if idx < len(models_to_try) - 1:
-                            safe_print(f"🔄 模型 {model_name} 觸發速率限制，立刻切換至下一個在線模型...")
+                            safe_print(f"🔄 所有金鑰旗艦模型皆受限，切換至次級模型...")
                             continue
                         elif len(groq_keys) > 1:
                             rotate_groq_key()
-                            if on_model_switch:
-                                on_model_switch("💡 NoType 提示：當前金鑰額度已滿，已自動輪替至備用金鑰")
                             break
                     elif "401" in err_str or "invalid_api_key" in err_msg if 'err_msg' in locals() else False:
                         if len(groq_keys) > 1:
@@ -576,20 +590,25 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
                             break
                     continue
                     
-    # 若 Groq 全部失敗或無 Key，嘗試啟動方案 C：Gemini 雙保險備援
-    gemini_key = get_gemini_api_key()
-    if gemini_key:
-        try:
-            safe_print("🔄 啟動 Gemini 雙保險備援修飾...")
-            res = generate_notes_gemini(transcript, system_prompt)
-            if res and res.strip():
-                if on_model_switch:
-                    on_model_switch("💡 NoType 提示：Groq 暫時受限，已無縫啟動 Gemini 雙保險備援")
-                return apply_dictionary_post_process(res.strip(), ambient_context=ambient_context)
-            else:
-                safe_print("⚠️ Gemini 備援回傳空字串")
-        except Exception as ge:
-            safe_print(f"⚠️ Gemini 備援亦失敗: {ge}")
+    # 若 Groq 全部失敗或無 Key，嘗試啟動方案 C：Gemini 雙保險備援 (SOP-046 多金鑰跨帳號輪替矩陣)
+    gemini_keys = get_all_gemini_keys()
+    if gemini_keys:
+        for _ in range(min(len(gemini_keys), 4)):
+            try:
+                curr_k = get_current_gemini_key()
+                safe_print(f"🔄 啟動 Gemini 雙保險備援修飾 (Key: {curr_k[:10]}...)...")
+                res = generate_notes_gemini(transcript, system_prompt, api_key=curr_k)
+                if res and res.strip():
+                    rotate_gemini_key()  # SOP-046: 成功調用後輪替，保持 A/B 1:1 交錯
+                    if on_model_switch:
+                        on_model_switch("💡 NoType 提示：Groq 暫時受限，已無縫啟動 Gemini 雙保險備援")
+                    return apply_dictionary_post_process(res.strip(), ambient_context=ambient_context)
+                else:
+                    safe_print("⚠️ Gemini 備援回傳空字串，輪替下一組金鑰...")
+                    rotate_gemini_key()
+            except Exception as ge:
+                safe_print(f"⚠️ Gemini 備援金鑰失敗: {ge}，依 SOP-046 輪替下一組金鑰...")
+                rotate_gemini_key()
             
     # 若完全沒有設定 Key
     if not groq_keys and not gemini_key:

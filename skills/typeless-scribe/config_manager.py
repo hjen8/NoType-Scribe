@@ -71,6 +71,18 @@ def rotate_groq_key() -> str:
     print(f"🔄 已輪替至第 {_current_key_idx + 1}/{len(keys)} 組 Groq API Key")
     return keys[_current_key_idx]
 
+def get_next_groq_key() -> str:
+    """SOP-046: 每次請求交替推進 Groq Key (Round-Robin 負載平衡)"""
+    global _current_key_idx
+    keys = get_all_groq_keys()
+    if not keys:
+        return ""
+    if len(keys) == 1:
+        return keys[0]
+    key = keys[_current_key_idx]
+    _current_key_idx = (_current_key_idx + 1) % len(keys)
+    return key
+
 def get_api_key() -> str:
     keys = get_all_groq_keys()
     if keys:
@@ -82,12 +94,59 @@ def set_api_key(api_key):
     config["GROQ_API_KEY"] = api_key
     save_config(config)
 
-def get_gemini_api_key() -> str:
+_current_gemini_key_idx = 0
+
+def get_all_gemini_keys() -> list:
     config = load_config()
-    cfg_key = config.get("GEMINI_API_KEY", "").strip()
-    if cfg_key:
-        return cfg_key
-    return os.environ.get("GEMINI_API_KEY", "").strip()
+    raw = config.get("GEMINI_API_KEY", "")
+    keys = parse_keys_list(raw)
+    if keys:
+        return keys
+    env_key = os.environ.get("GEMINI_API_KEY", "")
+    if env_key:
+        keys = parse_keys_list(env_key)
+        if keys:
+            return keys
+    return []
+
+def get_current_gemini_key() -> str:
+    global _current_gemini_key_idx
+    keys = get_all_gemini_keys()
+    if not keys:
+        return ""
+    if _current_gemini_key_idx >= len(keys):
+        _current_gemini_key_idx = 0
+    return keys[_current_gemini_key_idx]
+
+def rotate_gemini_key() -> str:
+    global _current_gemini_key_idx
+    keys = get_all_gemini_keys()
+    if len(keys) <= 1:
+        return ""
+    _current_gemini_key_idx = (_current_gemini_key_idx + 1) % len(keys)
+    print(f"🔄 已輪替至第 {_current_gemini_key_idx + 1}/{len(keys)} 組 Gemini API Key")
+    return keys[_current_gemini_key_idx]
+
+def get_next_gemini_key() -> str:
+    """SOP-046: 每次請求交替推進 Gemini Key (Round-Robin 負載平衡)"""
+    global _current_gemini_key_idx
+    keys = get_all_gemini_keys()
+    if not keys:
+        return ""
+    if len(keys) == 1:
+        return keys[0]
+    key = keys[_current_gemini_key_idx]
+    _current_gemini_key_idx = (_current_gemini_key_idx + 1) % len(keys)
+    return key
+
+def get_gemini_api_key() -> str:
+    return get_current_gemini_key()
+
+def get_gemini_api_key_display() -> str:
+    keys = get_all_gemini_keys()
+    if keys:
+        return ", ".join(keys)
+    return ""
 
 def set_gemini_api_key(api_key):
     config = load_config()
