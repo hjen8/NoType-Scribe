@@ -61,7 +61,13 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
         # 0. 【第 0 順位絕對先發】：日常系統與工作核心指令 (優先鎖死，100% 確保進駐 Whisper 前 50 bytes)
         command_priority = ["收工", "SOP", "Skill", "王貞云"]
 
-        # 1. 【第一順位先發】：親友與學生精選人名 (37 詞，約 370 bytes，確保重要親友與學生人名 100% 入選)
+        # 0.5 【核心電腦與檔案系統名詞】
+        core_computer = ["截圖", "如截圖", "金鑰", "S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "主選單", "波浪鍵", "全對"]
+
+        # 0.8 【教學、出版與教材名詞】（身為高中教師日常高頻，防止錯聽為漢林、獎益）
+        teaching_priority = ["翰林", "講義", "教師本", "教用本", "學用本", "龍騰", "三民", "高中數學", "高中地理", "段考", "模考"]
+
+        # 1. 【第一順位先發】：親友與學生精選人名 (去重保留全名，避免佔滿 prompt 造成常態用語被腦補為人名)
         name_priority = []
         try:
             import dictionary_manager
@@ -70,22 +76,23 @@ def transcribe_audio(file_path: str, return_meta: bool = False):
                 cat_name = cat.get("name", "")
                 if any(k in cat_name for k in ["人名", "親友", "家人", "學生"]):
                     for nw in cat.get("words", []):
-                        if nw not in name_priority and nw not in command_priority:
+                        if nw not in name_priority and nw not in command_priority and nw not in core_computer and nw not in teaching_priority:
                             name_priority.append(nw)
         except Exception:
             pass
             
-        # 2. 【第二順位先發】：核心電腦名詞、同音消歧義與自適應學習庫正確詞彙
-        core_priority = ["截圖", "如截圖", "S磁碟", "S碟", "磁碟", "程式", "磁碟機", "S槽", "主選單", "波浪鍵", "全對", "霈沄", "語昕"]
+        # 2. 【第二順位先發】：自適應學習庫正確詞彙
+        core_priority = []
         for correct in corrections.values():
             target = correct if isinstance(correct, str) else correct.get("correct", "")
-            if target and target not in core_priority and target not in name_priority and target not in command_priority:
+            if target and target not in core_priority and target not in name_priority and target not in command_priority and target not in core_computer and target not in teaching_priority:
                 core_priority.append(target)
                 
         dict_words = [w.strip() for w in custom_words.split(', ') if w.strip()]
         
+        # 組合四維度平衡詞庫：指令(4) + 電腦(12) + 教學出版(11) + 精選人名 + 自適應學習 + 字典其餘
         combined_words = []
-        for w in command_priority + name_priority + core_priority + dict_words:
+        for w in command_priority + core_computer + teaching_priority + name_priority + core_priority + dict_words:
             if w not in combined_words:
                 combined_words.append(w)
         
@@ -383,6 +390,11 @@ def apply_dictionary_post_process(text: str, ambient_context: str = "") -> str:
         "SDA": "S碟",
         "竹選單": "主選單",
         "金要": "金鑰",
+        "金藥": "金鑰",
+        "漢林": "翰林",
+        "獎益": "講義",
+        "教牌名": "各版本",
+        "教師懷敏": "教師本",
         "更號": "根號",
         "多項是": "多項式",
         "借時": "屆時",
@@ -448,7 +460,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
     system_prompt = (
         "你是一個『語音辨識逐字稿修飾助理』，不是聊天機器人。\n"
         "任務要求：\n"
-        "1. 【標點流暢與同音自癒】：加上正確繁體中文標點符號，使語句通順。★【同音錯別字積極修復】：語音輸入常因聲學發音相近產生無意義錯字（如：對話問亂➔對話紊亂、大蕩雞➔當機、玉復卡➔預付卡、盧亦卡➔如意卡、不要從何能開始➔不要從核能開始、台灣語量➔雨量、出題筆重➔比重、迎向亮處➔向量、入解圖/無戒圖/無截圖/入戒圖➔如截圖）。你必須根據全句上下文完整邏輯，主動且大膽地將這些同音錯字修正為正確繁體中文，絕對不要原樣照抄荒謬錯別字！\n"
+        "1. 【標點流暢與同音自癒】：加上正確繁體中文標點符號，使語句通順。★【同音錯別字積極修復】：語音輸入常因聲學發音相近產生無意義錯字（如：漢林➔翰林、獎益➔講義、教牌名➔各版本、金要/金藥➔金鑰、對話問亂➔對話紊亂、大蕩雞➔當機、玉復卡➔預付卡、盧亦卡➔如意卡、不要從何能開始➔不要從核能開始、台灣語量➔雨量、出題筆重➔比重、迎向亮處➔向量、入解圖/無戒圖/無截圖/入戒圖➔如截圖）。你必須根據全句上下文完整邏輯，主動且大膽地將這些同音錯字修正為正確繁體中文，絕對不要原樣照抄荒謬錯別字！\n"
         "2. 【智慧條列清單】：當內容為待辦、代辦、清單、採買、步驟流程或列舉多項重點時，強制換行並以垂直阿拉伯數字編號排版（如 1. 2. 3. ），每項獨立一行。\n"
         "3. 【單句無句號】：若僅為單一短句（無逗號等斷句），結尾絕對不要加句號；兩句以上複合語句結尾正常加句號。\n"
         "4. 【數字與單位標準化】：數值、年份、百分比、金額或度量衡，自動整理為半形阿拉伯數字與規範符號（如 250 元、80%、3.5 公分）。\n"
@@ -458,7 +470,7 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         "8. 【語速過快與連音口誤修復】：說話太快或連音導致受詞脫落時，依上下文自然縫合通順。\n"
         "9. 【改口與自我否定修剪】：遇即時改口標記（如『啊不對、不對、更正、改為、我是說、等等、換成、算了、應該是、我是要講』），主動拋棄前半段被推翻的口誤片段，只保留最終確認語意並自然縫合。改口標記詞本身絕對不輸出！例如『我明天要買三張票，啊不對，兩張票就好』應輸出為『我明天要買兩張票就好』。\n"
         "10. 【臺灣正體繁體在地化】：100% 採用臺灣正體繁體與習慣用語（影片、軟體、硬體、網路、記憶體、螢幕、伺服器、連結、列印、預設、登入、啟用、演算法、雷射、人工智慧、品質），嚴禁簡體與大陸用語。\n"
-        "11. 【常見檔案系統與指令專用詞】：收工(非素貢/速攻/素工/蘇共/塑工/速工)、S磁碟/S碟(非詞疊)、主選單(非竹選單)、金鑰(非金要)、上限(非上線)、記到/記入(非寄到)、波浪鍵(電腦鍵盤符號鍵~，非撥號鍵/撥浪鍵/波浪建/拨浪鍵)、截圖/如截圖(非入解圖/無戒圖/無截圖/入戒圖/無戒圖醫/入戒徒)、試用(非適用)。\n"
+        "11. 【常見檔案系統、指令與教學教材專用詞】：收工(非素貢/速攻/素工/蘇共/塑工/速工)、S磁碟/S碟(非詞疊)、主選單(非竹選單)、金鑰(非金要/金藥)、上限(非上線)、記到/記入(非寄到)、波浪鍵(電腦鍵盤符號鍵~，非撥號鍵/撥浪鍵/波浪建/拨浪鍵)、截圖/如截圖(非入解圖/無戒圖/無截圖/入戒圖/無戒圖醫/入戒徒)、試用(非適用)、翰林(非漢林)、講義(非獎益)、教師本/教用本(非教牌名/非誤認成人名)。\n"
         "12. 【Top 8 核心語意雙向消歧義】：全對/全隊、中點/終點、人名/人民、程式/城市、做/作、在/再、及/即、度/渡。\n"
         "13. 【爸爸要 vs 爸爸葯 專屬語意消歧義】：\n"
         "   - 『爸爸葯』為使用者專屬名詞（代表父親藥品之專用詞彙）。\n"
@@ -492,12 +504,11 @@ def generate_notes(transcript: str, on_model_switch=None, app_mode: str = 'gener
         names_str = ", ".join(name_words)
         system_prompt += (
             f"\n\n【親友學生姓名清單（最高權重）】：\n[{names_str}]\n"
-            f"★ 出現同音或極近音詞彙必須 100% 強制替換為清單中正確姓名（如 霈沄、語昕、省峿、培亦）。"
+            f"★ 唯有在人稱稱謂、對話稱呼或與人互動之語境下，出現同音或極近音詞彙才替換為清單中正確姓名（如 霈沄、語昕、省峿、培亦）。若上下文明顯為教材、書籍、物品、動作或一般日常陳述（例如『教師本各給我一本』、『這本講義』），絕對不可強硬改為人名！"
         )
     if other_words:
-        # 專科詞彙若超過 100 詞，優先保留逆序最新自適應學習的詞彙與核心詞，確保 Prompt 不超載
-        dict_sample = other_words[-100:] if len(other_words) > 100 else other_words
-        other_str = ", ".join(dict_sample)
+        # 專科詞彙全量注入（約 240 詞，完整覆蓋教學、出版、電腦、生活與自適應學習詞彙，杜絕截斷拋棄）
+        other_str = ", ".join(other_words)
         system_prompt += (
             f"\n\n【專科領域與專有名詞清單】：\n[{other_str}]\n"
             f"遇發音相同、同音異字或大小寫不同，一律修正為字典規範（只輸出純文字修飾結果，禁多餘說明）。"
